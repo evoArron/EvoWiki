@@ -1,5 +1,7 @@
 # EvoWiki
 
+> An AI-Native R&D brain based on Karpathy's LLM Wiki methodology and Model Context Protocol (MCP). Features an asset-decoupled Agentic RAG architecture with targeted contextual annotations, threaded human-in-the-loop alignment, and git-powered time travel.
+
 [中文文档](README.zh-CN.md) | [Product specification](docs/%E4%BC%81%E4%B8%9A%E7%BA%A7%20AI%20%E7%A0%94%E5%8F%91%E6%96%87%E6%A1%A3%E4%B8%AD%E6%9E%A2%E8%A7%84%E6%A0%BC%E8%AF%B4%E6%98%8E%E4%B9%A6.md)
 
 EvoWiki is an AI-native documentation hub for engineering organizations. It treats a single Git repository as the source of truth for documentation, keeps access control and annotations in a local SQLite database, and exposes focused, clean context to AI agents through MCP.
