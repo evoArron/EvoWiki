@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi.testclient import TestClient
 
 from app.main import create_app
@@ -55,6 +57,18 @@ def test_editor_can_review_reject_and_publish_a_draft_without_indexing_before_pu
     assert indexed == [("alpha", "alpha/docs/architecture.md", "# Ready", "test-commit")]
     assert (tmp_path / "enterprise-wiki-repo" / "alpha" / "docs" / "architecture.md").read_text() == "# Ready"
     assert client.get("/api/projects/alpha/documents", headers=editor_headers, params={"path": "docs/architecture.md"}).json() == {"path": "docs/architecture.md", "content": "# Ready", "git_commit": "test-commit"}
+
+
+def test_mcp_upload_stays_pending_until_human_publish(tmp_path):
+    client, _ = create_test_app(tmp_path)
+    admin_headers = login(client, "admin", "correct-horse-battery-staple")
+    editor_headers = create_editor(client, admin_headers)
+    token = editor_headers["Authorization"].removeprefix("Bearer ")
+
+    _, uploaded = asyncio.run(client.app.state.mcp.call_tool("upload_draft", {"access_token": token, "project_id": "alpha", "path": "mcp.md", "content": "# MCP"}))
+
+    assert uploaded["status"] == "pending"
+    assert client.get("/api/projects/alpha/drafts", headers=editor_headers).json()[0]["draft_path"] == "alpha/.drafts/mcp.md"
 
 
 def test_chroma_indexer_keeps_code_fences_whole_and_returns_source_metadata(tmp_path):

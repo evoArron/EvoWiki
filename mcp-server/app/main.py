@@ -625,6 +625,7 @@ def create_app(
                 raise ValueError("没有项目权限")
             return publisher.indexer.search(requested, query)
 
+    app.state.mcp = mcp
     app.mount("/mcp", mcp.streamable_http_app())
     return app
 
