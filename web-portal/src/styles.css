@@ -1,0 +1,35 @@
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #f5f7fa;
+  color: #1f2937;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.identity-page {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.identity-card {
+  max-width: 420px;
+  width: 100%;
+}
+
+.login-error {
+  margin-bottom: 16px;
+}
+
+.page-spinner {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+}

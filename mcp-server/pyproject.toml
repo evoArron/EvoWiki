@@ -1,0 +1,25 @@
+[project]
+name = "evowiki-mcp-server"
+version = "0.1.0"
+description = "EvoWiki MVP backend"
+requires-python = ">=3.11"
+dependencies = [
+  "bcrypt==5.0.0",
+  "fastapi==0.128.0",
+  "PyJWT==2.10.1",
+  "sqlalchemy==2.0.45",
+  "uvicorn[standard]==0.40.0",
+]
+
+[project.scripts]
+evowiki-api = "app.main:run"
+
+[dependency-groups]
+dev = [
+  "httpx==0.28.1",
+  "pytest==9.0.2",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
