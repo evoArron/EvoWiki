@@ -1,5 +1,5 @@
 import { isValidElement, useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { Alert, Button, Card, Drawer, Empty, Form, Input, Select, Spin, Tooltip, Tree, Typography } from "antd";
+import { Alert, Button, Card, Empty, Form, Input, Spin, Tooltip, Tree, Typography } from "antd";
 import type { DataNode } from "antd/es/tree";
 import { BookOpen, FolderTree, LogOut, Settings } from "lucide-react";
 import ReactMarkdown from "react-markdown";
@@ -171,31 +171,6 @@ export function App() {
       sessionStorage.setItem(TOKEN_KEY, access_token);
       setUser(currentUser);
       setProjects(await readProjects(access_token));
-    } catch {
-      setError("无法连接认证服务，请稍后重试");
-    }
-  }
-
-  async function adminRequest(path: string, body: object) {
-    const token = sessionStorage.getItem(TOKEN_KEY);
-    if (!token) {
-      return;
-    }
-    setError(null);
-    try {
-      const response = await fetch(`${API_BASE_URL}${path}`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      });
-      if (!response.ok) {
-        setError("操作失败，请检查输入和权限");
-        return;
-      }
-      setProjects(await readProjects(token));
     } catch {
       setError("无法连接认证服务，请稍后重试");
     }
@@ -419,32 +394,6 @@ export function App() {
         </section>
       </div>
 
-      <Drawer className="management-drawer" open={false} title="工作台管理" width={400} onClose={() => setManagementOpen(false)}>
-        <section className="management-section">
-          <h3>创建成员</h3>
-          <Form layout="vertical" onFinish={(values) => adminRequest("/api/admin/users", values)}>
-            <Form.Item label="成员用户名" name="username" rules={[{ required: true, message: "请输入用户名" }]}><Input /></Form.Item>
-            <Form.Item label="初始密码" name="password" rules={[{ required: true, message: "请输入密码" }]}><Input.Password /></Form.Item>
-            <Button htmlType="submit" type="primary">创建成员</Button>
-          </Form>
-        </section>
-        <section className="management-section">
-          <h3>创建项目</h3>
-          <Form layout="vertical" onFinish={(values) => adminRequest("/api/admin/projects", values)}>
-            <Form.Item label="项目标识" name="project_id" rules={[{ required: true, message: "请输入项目标识" }]}><Input placeholder="例如 alpha-project" /></Form.Item>
-            <Button htmlType="submit">创建项目</Button>
-          </Form>
-        </section>
-        <section className="management-section">
-          <h3>授予项目权限</h3>
-          <Form layout="vertical" onFinish={(values) => adminRequest(`/api/admin/projects/${values.project_id}/permissions`, values)}>
-            <Form.Item label="项目标识" name="project_id" rules={[{ required: true, message: "请输入项目标识" }]}><Input /></Form.Item>
-            <Form.Item label="成员用户名" name="username" rules={[{ required: true, message: "请输入用户名" }]}><Input /></Form.Item>
-            <Form.Item label="项目角色" name="role" rules={[{ required: true, message: "请选择项目角色" }]}><Select options={[{ value: "viewer", label: "查看者" }, { value: "editor", label: "编辑者" }]} /></Form.Item>
-            <Button htmlType="submit">授予权限</Button>
-          </Form>
-        </section>
-      </Drawer>
       <ManagementCenter open={managementOpen} onClose={() => setManagementOpen(false)} token={sessionStorage.getItem(TOKEN_KEY)} />
     </main>
   );
