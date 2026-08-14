@@ -64,6 +64,20 @@ class AuditLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), index=True)
 
 
+class Publication(Base):
+    __tablename__ = "publications"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(64), index=True)
+    draft_path: Mapped[str] = mapped_column(String(512), unique=True)
+    target_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    error: Mapped[str | None] = mapped_column(String, nullable=True)
+    git_commit: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
+
+
 class Comment(Base):
     __tablename__ = "comments"
 

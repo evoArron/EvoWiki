@@ -92,14 +92,13 @@ def test_document_tree_rejects_docs_symlink_outside_project(tmp_path):
     assert response.status_code == 422
 
 
-def test_authorized_member_can_read_a_published_markdown_document(tmp_path):
+def test_authorized_member_cannot_read_an_unindexed_markdown_document(tmp_path):
     client = TestClient(create_test_app(tmp_path))
     reader_headers = create_authorized_reader(client)
     (tmp_path / "enterprise-wiki-repo" / "alpha" / "docs" / "intro.md").write_text(
-        "# Intro\n\nPublished content.", encoding="utf-8"
+        "# Intro\n\nUnindexed content.", encoding="utf-8"
     )
 
     response = client.get("/api/projects/alpha/documents", params={"path": "docs/intro.md"}, headers=reader_headers)
 
-    assert response.status_code == 200
-    assert response.json() == {"path": "docs/intro.md", "content": "# Intro\n\nPublished content."}
+    assert response.status_code == 404

@@ -5,6 +5,7 @@ import { BookOpen, FolderTree, LogOut, Settings } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+import { DraftPanel } from "./DraftPanel";
 import { ManagementCenter } from "./ManagementCenter";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
@@ -134,6 +135,7 @@ export function App() {
   const [documentLoading, setDocumentLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [managementOpen, setManagementOpen] = useState(false);
+  const [draftsOpen, setDraftsOpen] = useState(false);
 
   useEffect(() => {
     const token = sessionStorage.getItem(TOKEN_KEY);
@@ -280,6 +282,7 @@ export function App() {
     setProjects([]);
     setTreeData([]);
     setManagementOpen(false);
+    setDraftsOpen(false);
     setUser(null);
   }
 
@@ -330,6 +333,7 @@ export function App() {
               <Button aria-label="管理" className="header-icon-button" icon={<Settings size={18} />} type="text" onClick={() => setManagementOpen(true)} />
             </Tooltip>
           )}
+          {activeProject && projects.find((project) => project.project_id === activeProject)?.role !== "viewer" && <Button type="text" onClick={() => setDraftsOpen(true)}>草稿</Button>}
           <Tooltip title="退出登录">
             <Button aria-label="退出登录" className="header-icon-button" icon={<LogOut size={18} />} type="text" onClick={logout} />
           </Tooltip>
@@ -386,6 +390,7 @@ export function App() {
             isSystemAdmin={user.role === "system_admin"}
             manageableProjects={projects.filter((project) => project.role === "project_admin")}
           /> : <>
+            {activeProject && sessionStorage.getItem(TOKEN_KEY) && <DraftPanel open={draftsOpen} onClose={() => setDraftsOpen(false)} projectId={activeProject} token={sessionStorage.getItem(TOKEN_KEY)!} onPublished={() => void selectProject(activeProject)} />}
             {error && <Alert className="workspace-error" type="error" showIcon message={error} closable onClose={() => setError(null)} />}
             {documentLoading ? <div className="reader-state"><Spin size="large" /></div> : document ? <article className="markdown-document"><div className="document-path">{document.path}</div><ReactMarkdown remarkPlugins={[remarkGfm]} components={{ pre: MarkdownPre }}>{document.content}</ReactMarkdown></article> : <div className="reader-state"><BookOpen size={32} strokeWidth={1.4} aria-hidden="true" /><Typography.Title level={3}>{activeProject ? "从目录中选择文档" : "选择项目开始阅读"}</Typography.Title></div>}
           </>}

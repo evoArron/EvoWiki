@@ -10,11 +10,13 @@ import bcrypt
 import jwt
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
+from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.database import AuditLog, Project, ProjectPermission, User, create_session_factory, find_project, find_project_permission, find_user, session_dependency
+from app.database import AuditLog, Project, ProjectPermission, Publication, User, create_session_factory, find_project, find_project_permission, find_user, session_dependency
+from app.publishing import ChromaIndexer, GitRunner, Indexer, PublicationService, run_git
 
 TOKEN_LIFETIME = timedelta(hours=8)
 PROJECT_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
@@ -133,6 +135,27 @@ class TreeNode(BaseModel):
 class DocumentResponse(BaseModel):
     path: str
     content: str
+    git_commit: str | None = None
+
+
+class DraftRequest(BaseModel):
+    path: str = ""
+    content: str
+
+
+class PublishRequest(BaseModel):
+    target_path: str
+    overwrite: bool = False
+
+
+class PublicationResponse(BaseModel):
+    id: int
+    project_id: str
+    draft_path: str
+    target_path: str | None
+    status: str
+    error: str | None
+    git_commit: str | None
 
 
 def required_environment(name: str) -> str:
@@ -149,6 +172,8 @@ def create_app(
     jwt_secret: str | None = None,
     initial_admin_username: str | None = None,
     initial_admin_password: str | None = None,
+    git_runner: GitRunner = run_git,
+    indexer: Indexer | None = None,
 ) -> FastAPI:
     database_path = database_path or SERVICE_ROOT / "evowiki.db"
     database_root = database_root or SERVICE_ROOT
@@ -158,6 +183,7 @@ def create_app(
     initial_admin_password = initial_admin_password or required_environment("EVOWIKI_ADMIN_PASSWORD")
     session_factory = create_session_factory(database_path, database_root)
     seed_admin(session_factory, initial_admin_username, initial_admin_password)
+    publisher = PublicationService(wiki_root, git_runner, indexer or ChromaIndexer(database_root / "chroma"))
 
     app = FastAPI(title="EvoWiki MCP Server")
     app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"], allow_credentials=False, allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE"], allow_headers=["Authorization", "Content-Type"])
@@ -224,6 +250,15 @@ def create_app(
         permission = find_project_permission(session, user.id, project.project_id) if user else None
         role = "project_admin" if user and user.role == "system_admin" else (permission.role if permission else None)
         return ProjectResponse(project_id=project.project_id, name=project.name, description=project.description, owner_username=owner.username if owner else "", status=project.status, role=role)
+
+    def publication_response(publication: Publication) -> PublicationResponse:
+        return PublicationResponse(id=publication.id, project_id=publication.project_id, draft_path=publication.draft_path, target_path=publication.target_path, status=publication.status, error=publication.error, git_commit=publication.git_commit)
+
+    def publication_or_404(publication_id: int, project_id: str, session: Session) -> Publication:
+        publication = session.get(Publication, publication_id)
+        if publication is None or publication.project_id != project_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="草稿不存在")
+        return publication
 
     @app.post("/api/auth/login", response_model=TokenResponse)
     def login(credentials: LoginRequest, session: Session = Depends(get_session)) -> TokenResponse:
@@ -468,6 +503,58 @@ def create_app(
         entries = session.scalars(statement.offset((page - 1) * page_size).limit(page_size))
         return AuditLogPage(items=[AuditLogResponse(id=entry.id, actor_username=(session.get(User, entry.actor_id).username if session.get(User, entry.actor_id) else ""), action=entry.action, object_type=entry.object_type, object_id=entry.object_id, project_id=entry.project_id, before_summary=json.loads(entry.before_summary), after_summary=json.loads(entry.after_summary), created_at=entry.created_at) for entry in entries], total=session.scalar(count_statement) or 0)
 
+    @app.post("/api/projects/{project_id}/drafts", response_model=PublicationResponse, status_code=status.HTTP_201_CREATED)
+    def create_draft(project_id: str, request: DraftRequest, user: User = Depends(ready_user), session: Session = Depends(get_session)) -> PublicationResponse:
+        project_access(project_id, user, session, require_write=True)
+        return publication_response(publisher.create_draft(session, project_id, request.path, request.content))
+
+    @app.get("/api/projects/{project_id}/drafts", response_model=list[PublicationResponse])
+    def list_drafts(project_id: str, user: User = Depends(ready_user), session: Session = Depends(get_session)) -> list[PublicationResponse]:
+        project_access(project_id, user, session, require_write=True)
+        return [publication_response(item) for item in session.scalars(select(Publication).where(Publication.project_id == project_id, Publication.status == "pending").order_by(Publication.id))]
+
+    @app.get("/api/projects/{project_id}/drafts/{publication_id}", response_model=DocumentResponse)
+    def read_draft(project_id: str, publication_id: int, user: User = Depends(ready_user), session: Session = Depends(get_session)) -> DocumentResponse:
+        project_access(project_id, user, session, require_write=True)
+        publication = publication_or_404(publication_id, project_id, session)
+        path = publisher._safe_path(wiki_root, publication.draft_path)
+        if publication.status != "pending" or not path.is_file():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="草稿不存在")
+        return DocumentResponse(path=publication.draft_path, content=path.read_text(encoding="utf-8"))
+
+    @app.put("/api/projects/{project_id}/drafts/{publication_id}", response_model=PublicationResponse)
+    def update_draft(project_id: str, publication_id: int, request: DraftRequest, user: User = Depends(ready_user), session: Session = Depends(get_session)) -> PublicationResponse:
+        project_access(project_id, user, session, require_write=True)
+        publication = publication_or_404(publication_id, project_id, session)
+        if publication.status != "pending":
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="草稿不可修订")
+        publisher.update_draft(publication, request.content)
+        session.commit()
+        return publication_response(publication)
+
+    @app.delete("/api/projects/{project_id}/drafts/{publication_id}", status_code=status.HTTP_204_NO_CONTENT)
+    def reject_draft(project_id: str, publication_id: int, user: User = Depends(ready_user), session: Session = Depends(get_session)) -> None:
+        project_access(project_id, user, session, require_write=True)
+        publication = publication_or_404(publication_id, project_id, session)
+        if publication.status != "pending":
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="草稿不可拒绝")
+        publisher.reject_draft(publication)
+        session.commit()
+
+    @app.post("/api/projects/{project_id}/drafts/{publication_id}/publish", response_model=PublicationResponse)
+    def publish_draft(project_id: str, publication_id: int, request: PublishRequest, user: User = Depends(ready_user), session: Session = Depends(get_session)) -> PublicationResponse:
+        project_access(project_id, user, session, require_write=True)
+        publication = publisher.publish(publication_or_404(publication_id, project_id, session), request.target_path, request.overwrite)
+        session.commit()
+        return publication_response(publication)
+
+    @app.post("/api/projects/{project_id}/drafts/{publication_id}/retry", response_model=PublicationResponse)
+    def retry_draft(project_id: str, publication_id: int, user: User = Depends(ready_user), session: Session = Depends(get_session)) -> PublicationResponse:
+        project_access(project_id, user, session, require_write=True)
+        publication = publisher.retry(publication_or_404(publication_id, project_id, session))
+        session.commit()
+        return publication_response(publication)
+
     @app.get("/api/projects", response_model=list[ProjectResponse])
     def list_projects(user: User = Depends(ready_user), session: Session = Depends(get_session)) -> list[ProjectResponse]:
         projects = session.scalars(select(Project).order_by(Project.project_id)) if user.role == "system_admin" else [find_project(session, permission.project_id) for permission in session.scalars(select(ProjectPermission).where(ProjectPermission.user_id == user.id))]
@@ -489,8 +576,56 @@ def create_app(
         document_path = safe_markdown_document_path(project_path, path)
         if not document_path.is_file():
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文档不存在")
-        return DocumentResponse(path=str(document_path.relative_to(project_path)), content=document_path.read_text(encoding="utf-8"))
+        relative_path = str(document_path.relative_to(wiki_root))
+        publication = session.scalar(select(Publication).where(Publication.project_id == project_id, Publication.target_path == relative_path, Publication.status == "indexed"))
+        if publication is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文档尚未发布")
+        return DocumentResponse(path=str(document_path.relative_to(project_path)), content=document_path.read_text(encoding="utf-8"), git_commit=publication.git_commit)
 
+    mcp = FastMCP("EvoWiki")
+
+    def mcp_user(access_token: str, session: Session) -> User:
+        try:
+            payload = jwt.decode(access_token.removeprefix("Bearer "), jwt_secret, algorithms=["HS256"])
+            user = find_user(session, payload["sub"])
+        except (jwt.InvalidTokenError, KeyError):
+            raise ValueError("认证失败") from None
+        if user is None or not user.is_active or user.session_version != payload["sv"] or user.must_change_password:
+            raise ValueError("认证失败")
+        return user
+
+    @mcp.tool(description="向有编辑权限的项目提交待核对 Markdown 草稿。此工具不能发布、推送或索引内容。")
+    def upload_draft(access_token: str, project_id: str, path: str, content: str) -> dict[str, object]:
+        with session_factory() as session:
+            user = mcp_user(access_token, session)
+            project_access(project_id, user, session, require_write=True)
+            return publication_response(publisher.create_draft(session, project_id, path, content)).model_dump()
+
+    @mcp.tool(description="读取调用者有权访问且已推送、已索引的正式 Markdown 原文。")
+    def read_published_document(access_token: str, project_id: str, path: str) -> dict[str, str]:
+        with session_factory() as session:
+            user = mcp_user(access_token, session)
+            project_access(project_id, user, session)
+            project_path = safe_project_path(wiki_root, project_id)
+            document_path = safe_markdown_document_path(project_path, path)
+            publication = session.scalar(select(Publication).where(Publication.project_id == project_id, Publication.target_path == str(document_path.relative_to(wiki_root)), Publication.status == "indexed"))
+            if publication is None or not document_path.is_file():
+                raise ValueError("文档不存在或尚未发布")
+            return {"path": publication.target_path or "", "content": document_path.read_text(encoding="utf-8"), "git_commit": publication.git_commit or ""}
+
+    @mcp.tool(description="检索调用者有权访问项目中的已索引原文块，并返回标题、路径和 Git commit 来源。")
+    def search_published_documents(access_token: str, query: str, project_ids: list[str] | None = None) -> list[dict[str, str]]:
+        if not isinstance(publisher.indexer, ChromaIndexer):
+            raise ValueError("原文 RAG 索引器不可用")
+        with session_factory() as session:
+            user = mcp_user(access_token, session)
+            allowed = [project.project_id for project in session.scalars(select(Project)) if (user.role == "system_admin" or find_project_permission(session, user.id, project.project_id))]
+            requested = project_ids or allowed
+            if any(project_id not in allowed for project_id in requested):
+                raise ValueError("没有项目权限")
+            return publisher.indexer.search(requested, query)
+
+    app.mount("/mcp", mcp.streamable_http_app())
     return app
 
 
