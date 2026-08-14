@@ -9,6 +9,16 @@
 *   **手动控制，消除时差**：拒绝复杂的自动合并与异步双轨检索。引入网页端【更新并建立索引】实体按钮，由人类显式控制资产的沉淀与向量化，用最确定性的串行流程换取绝对的语义精准。
 *   **真理在主干，碰撞在历史**：文档主干始终保持绝对干净，划词评论数据剥离至 SQLite 中，大模型通过 MCP 仅读取净化后的特定上下文，杜绝长上下文“旧记忆污染”。
 
+### MVP 范围（优先级高于后续模块细节）
+本说明书保留完整产品愿景；若后文模块与本节冲突，以本节作为 MVP 的实现边界。
+
+*   **输入**：仅接受 Markdown 文件。人类确认的文件可发布；MCP 可上传 Markdown 草稿，必须经人类核对后才可发布。Office/PDF/Excel 转换、MarkItDown、附件留底、双栏校对和 Git LFS 后置。
+*   **知识源**：项目相互隔离；不做依赖挂载、跨项目检索或跨项目树展示。
+*   **发布与检索**：MCP 草稿保存于项目 `.drafts/`，不进入 Git 或 RAG。人类确认发布后，服务串行完成 Git commit、Git push 和 Raw RAG 索引。MCP 可读取已索引原文，并返回来源路径与 Git commit。
+*   **暂不交付**：Markdown 协同编辑、复杂草稿工作流、划词评论、WebSocket 通知、Git 时光机、MCP 直接发布、LLM Wiki 编译、reranking、模型配置 UI、长文档自动拆分和跨文档综合 Wiki。
+*   **保留的安全底线**：SQLite 用户与项目 ACL、JWT、`os.path.commonpath` 文件沙箱，以及全量覆盖式前端刷新策略。
+*   **后续规划**：已确认后置能力及其进入条件统一记录于[产品路线图](EvoWiki-产品路线图.md)。
+
 ---
 
 ## 🏗️ 2. 全局物理文件与数据架构 (Monorepo)
@@ -113,9 +123,9 @@ evowiki/
     "postcss": "^8.4.38",
     "react-markdown": "^9.0.1",
     "remark-gfm": "^4.0.0",
-    "react-mermaid": "^1.0.1",
+    "react-mermaid": "0.1.3",
     "mermaid": "^10.9.1",
-    "react-diff-viewer-next": "^3.1.2",
+    "react-diff-viewer-next": "0.1.0-alpha",
     "lucide-react": "^0.395.0"
   },
   "devDependencies": {
