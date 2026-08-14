@@ -1,5 +1,7 @@
 import os
+import re
 from datetime import UTC, datetime, timedelta
+from os.path import commonpath
 from pathlib import Path
 
 import bcrypt
@@ -7,17 +9,41 @@ import jwt
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.database import User, create_session_factory, find_user, session_dependency
+from app.database import (
+    ProjectPermission,
+    User,
+    create_session_factory,
+    find_project_permission,
+    find_user,
+    session_dependency,
+)
 
 TOKEN_LIFETIME = timedelta(hours=8)
+PROJECT_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
 SERVICE_ROOT = Path(__file__).resolve().parent.parent
+WIKI_ROOT = SERVICE_ROOT.parent / "enterprise-wiki-repo"
 
 
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+
+class CreateUserRequest(BaseModel):
+    username: str
+    password: str
+
+
+class CreateProjectRequest(BaseModel):
+    project_id: str
+
+
+class GrantProjectPermissionRequest(BaseModel):
+    username: str
+    role: str
 
 
 class TokenResponse(BaseModel):
@@ -27,6 +53,11 @@ class TokenResponse(BaseModel):
 
 class CurrentUserResponse(BaseModel):
     username: str
+    role: str
+
+
+class ProjectResponse(BaseModel):
+    project_id: str
     role: str
 
 
@@ -40,12 +71,14 @@ def required_environment(name: str) -> str:
 def create_app(
     database_path: Path | None = None,
     database_root: Path | None = None,
+    wiki_root: Path | None = None,
     jwt_secret: str | None = None,
     initial_admin_username: str | None = None,
     initial_admin_password: str | None = None,
 ) -> FastAPI:
     database_path = database_path or SERVICE_ROOT / "evowiki.db"
     database_root = database_root or SERVICE_ROOT
+    wiki_root = wiki_root or WIKI_ROOT
     jwt_secret = jwt_secret or required_environment("EVOWIKI_JWT_SECRET")
     initial_admin_username = initial_admin_username or required_environment("EVOWIKI_ADMIN_USERNAME")
     initial_admin_password = initial_admin_password or required_environment("EVOWIKI_ADMIN_PASSWORD")
@@ -81,6 +114,11 @@ def create_app(
             raise unauthorized()
         return user
 
+    def admin_user(user: User = Depends(current_user)) -> User:
+        if user.role != "admin":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="需要管理员权限")
+        return user
+
     @app.post("/api/auth/login", response_model=TokenResponse)
     def login(credentials: LoginRequest, session: Session = Depends(get_session)) -> TokenResponse:
         user = find_user(session, credentials.username)
@@ -88,7 +126,7 @@ def create_app(
             password_matches = user is not None and bcrypt.checkpw(credentials.password.encode(), user.password_hash.encode())
         except ValueError:
             password_matches = False
-        if user is None or user.role != "admin" or not password_matches:
+        if user is None or not password_matches:
             raise unauthorized()
 
         expires_at = datetime.now(UTC) + TOKEN_LIFETIME
@@ -99,7 +137,79 @@ def create_app(
     def read_current_user(user: User = Depends(current_user)) -> CurrentUserResponse:
         return CurrentUserResponse(username=user.username, role=user.role)
 
+    @app.post("/api/admin/users", status_code=status.HTTP_201_CREATED, response_model=CurrentUserResponse)
+    def create_user(
+        request: CreateUserRequest,
+        session: Session = Depends(get_session),
+        _: User = Depends(admin_user),
+    ) -> CurrentUserResponse:
+        if find_user(session, request.username) is not None:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="用户名已存在")
+        try:
+            password_hash = bcrypt.hashpw(request.password.encode(), bcrypt.gensalt()).decode()
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="密码过长") from None
+
+        user = User(username=request.username, password_hash=password_hash, role="member")
+        session.add(user)
+        session.commit()
+        return CurrentUserResponse(username=user.username, role=user.role)
+
+    @app.post("/api/admin/projects", status_code=status.HTTP_201_CREATED, response_model=ProjectResponse)
+    def create_project(
+        request: CreateProjectRequest,
+        session: Session = Depends(get_session),
+        admin: User = Depends(admin_user),
+    ) -> ProjectResponse:
+        project_path = safe_project_path(wiki_root, request.project_id)
+        if project_path.exists():
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="项目已存在")
+
+        (project_path / "docs").mkdir(parents=True)
+        session.add(ProjectPermission(user_id=admin.id, project_id=request.project_id, role="admin"))
+        session.commit()
+        return ProjectResponse(project_id=request.project_id, role="admin")
+
+    @app.post("/api/admin/projects/{project_id}/permissions", response_model=ProjectResponse)
+    def grant_project_permission(
+        project_id: str,
+        request: GrantProjectPermissionRequest,
+        session: Session = Depends(get_session),
+        _: User = Depends(admin_user),
+    ) -> ProjectResponse:
+        safe_project_path(wiki_root, project_id)
+        if request.role not in {"viewer", "editor"}:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效项目角色")
+        user = find_user(session, request.username)
+        if user is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
+        permission = find_project_permission(session, user.id, project_id)
+        if permission is None:
+            permission = ProjectPermission(user_id=user.id, project_id=project_id, role=request.role)
+            session.add(permission)
+        else:
+            permission.role = request.role
+        session.commit()
+        return ProjectResponse(project_id=project_id, role=request.role)
+
+    @app.get("/api/projects", response_model=list[ProjectResponse])
+    def list_projects(user: User = Depends(current_user), session: Session = Depends(get_session)) -> list[ProjectResponse]:
+        permissions = session.scalars(
+            select(ProjectPermission).where(ProjectPermission.user_id == user.id).order_by(ProjectPermission.project_id)
+        )
+        return [ProjectResponse(project_id=permission.project_id, role=permission.role) for permission in permissions]
+
     return app
+
+
+def safe_project_path(wiki_root: Path, project_id: str) -> Path:
+    if not PROJECT_ID_PATTERN.fullmatch(project_id):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效项目标识")
+    resolved_root = wiki_root.resolve()
+    project_path = (resolved_root / project_id).resolve()
+    if commonpath([str(resolved_root), str(project_path)]) != str(resolved_root):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效项目路径")
+    return project_path
 
 
 def seed_admin(factory: sessionmaker[Session], username: str, password: str) -> None:

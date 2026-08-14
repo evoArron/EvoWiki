@@ -2,7 +2,7 @@ from collections.abc import Generator
 from os.path import commonpath
 from pathlib import Path
 
-from sqlalchemy import String, create_engine, select
+from sqlalchemy import String, UniqueConstraint, create_engine, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 
@@ -21,6 +21,7 @@ class User(Base):
 
 class ProjectPermission(Base):
     __tablename__ = "project_permissions"
+    __table_args__ = (UniqueConstraint("user_id", "project_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(index=True)
@@ -52,6 +53,15 @@ def create_session_factory(database_path: Path, database_root: Path) -> sessionm
 
 def find_user(session: Session, username: str) -> User | None:
     return session.scalar(select(User).where(User.username == username))
+
+
+def find_project_permission(session: Session, user_id: int, project_id: str) -> ProjectPermission | None:
+    return session.scalar(
+        select(ProjectPermission).where(
+            ProjectPermission.user_id == user_id,
+            ProjectPermission.project_id == project_id,
+        )
+    )
 
 
 def session_dependency(factory: sessionmaker[Session]) -> Generator[Session, None, None]:
