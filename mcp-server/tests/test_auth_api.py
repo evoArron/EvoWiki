@@ -31,7 +31,13 @@ def test_admin_can_log_in_and_read_current_identity(tmp_path):
     )
 
     assert current_user.status_code == 200
-    assert current_user.json() == {"username": "admin", "role": "admin"}
+    assert current_user.json() == {
+        "username": "admin",
+        "display_name": "admin",
+        "role": "system_admin",
+        "is_active": True,
+        "must_change_password": False,
+    }
 
 
 def test_invalid_or_missing_credentials_are_rejected(tmp_path):

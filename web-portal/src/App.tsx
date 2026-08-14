@@ -5,6 +5,8 @@ import { BookOpen, FolderTree, LogOut, Settings } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+import { ManagementCenter } from "./ManagementCenter";
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 const TOKEN_KEY = "evowiki.access-token";
 
@@ -322,9 +324,9 @@ export function App() {
         <div className="user-actions">
           <div className="user-identity">
             <strong>{user.username}</strong>
-            <span>{user.role === "admin" ? "管理员" : user.role}</span>
+            <span>{user.role === "system_admin" ? "系统管理员" : user.role}</span>
           </div>
-          {user.role === "admin" && (
+          {user.role === "system_admin" && (
             <Tooltip title="管理">
               <Button aria-label="管理" className="header-icon-button" icon={<Settings size={18} />} type="text" onClick={() => setManagementOpen(true)} />
             </Tooltip>
@@ -397,7 +399,7 @@ export function App() {
         </section>
       </div>
 
-      <Drawer className="management-drawer" open={managementOpen} title="工作台管理" width={400} onClose={() => setManagementOpen(false)}>
+      <Drawer className="management-drawer" open={false} title="工作台管理" width={400} onClose={() => setManagementOpen(false)}>
         <section className="management-section">
           <h3>创建成员</h3>
           <Form layout="vertical" onFinish={(values) => adminRequest("/api/admin/users", values)}>
@@ -423,6 +425,7 @@ export function App() {
           </Form>
         </section>
       </Drawer>
+      <ManagementCenter open={managementOpen} onClose={() => setManagementOpen(false)} token={sessionStorage.getItem(TOKEN_KEY)} />
     </main>
   );
 }

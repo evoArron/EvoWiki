@@ -23,14 +23,25 @@ def login(client: TestClient, username: str, password: str) -> dict[str, str]:
 
 def create_authorized_reader(client: TestClient) -> dict[str, str]:
     admin_headers = login(client, "admin", "correct-horse-battery-staple")
-    client.post("/api/admin/users", headers=admin_headers, json={"username": "reader", "password": "reader-password"})
+    client.post(
+        "/api/admin/users",
+        headers=admin_headers,
+        json={"username": "reader", "display_name": "Reader", "password": "reader-password"},
+    )
     client.post("/api/admin/projects", headers=admin_headers, json={"project_id": "alpha"})
     client.post(
         "/api/admin/projects/alpha/permissions",
         headers=admin_headers,
         json={"username": "reader", "role": "viewer"},
     )
-    return login(client, "reader", "reader-password")
+    temporary_headers = login(client, "reader", "reader-password")
+    response = client.post(
+        "/api/auth/change-password",
+        headers=temporary_headers,
+        json={"current_password": "reader-password", "new_password": "reader-password-active"},
+    )
+    assert response.status_code == 204
+    return login(client, "reader", "reader-password-active")
 
 
 def test_authorized_member_can_lazily_read_a_project_document_tree(tmp_path):
@@ -59,7 +70,7 @@ def test_document_tree_rejects_unassigned_projects_and_paths_outside_docs(tmp_pa
     escaped_document = client.get("/api/projects/alpha/documents", params={"path": "docs/../secret.md"}, headers=headers)
     non_markdown_document = client.get("/api/projects/alpha/documents", params={"path": "docs/note.txt"}, headers=headers)
 
-    assert unknown_project.status_code == 403
+    assert unknown_project.status_code == 404
     assert escaped_path.status_code == 422
     assert escaped_document.status_code == 422
     assert non_markdown_document.status_code == 422
