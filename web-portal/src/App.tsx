@@ -13,6 +13,7 @@ const TOKEN_KEY = "evowiki.access-token";
 type CurrentUser = {
   username: string;
   role: string;
+  must_change_password: boolean;
 };
 
 type Project = {
@@ -277,6 +278,21 @@ export function App() {
     }
   }
 
+  async function changePassword(values: { current_password: string; new_password: string }) {
+    const token = sessionStorage.getItem(TOKEN_KEY);
+    if (!token) return;
+    const response = await fetch(`${API_BASE_URL}/api/auth/change-password`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(values),
+    });
+    if (!response.ok) {
+      setError("密码修改失败");
+      return;
+    }
+    logout();
+  }
+
   function logout() {
     ++documentRequest.current;
     sessionStorage.removeItem(TOKEN_KEY);
@@ -311,6 +327,10 @@ export function App() {
         </Card>
       </main>
     );
+  }
+
+  if (user.must_change_password) {
+    return <main className="identity-page"><Card title="设置新密码" className="identity-card"><Form layout="vertical" onFinish={changePassword} requiredMark={false}><Form.Item label="临时密码" name="current_password" rules={[{ required: true }]}><Input.Password /></Form.Item><Form.Item label="新密码" name="new_password" rules={[{ required: true }]}><Input.Password /></Form.Item>{error && <Alert className="login-error" type="error" showIcon message={error} />}<Button htmlType="submit" type="primary" block>确认修改</Button></Form></Card></main>;
   }
 
   return (

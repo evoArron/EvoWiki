@@ -201,6 +201,8 @@ def create_app(
         project = find_project(session, project_id)
         if project is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="项目不存在")
+        if project.status != "active":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="归档项目不可管理")
         if user.role != "system_admin":
             permission = find_project_permission(session, user.id, project_id)
             if project.status != "active" or permission is None or permission.role != "project_admin":
