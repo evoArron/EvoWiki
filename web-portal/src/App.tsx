@@ -379,32 +379,18 @@ export function App() {
         </aside>
 
         <section className="reader-panel" aria-label="文档阅读区">
-          {error && <Alert className="workspace-error" type="error" showIcon message={error} closable onClose={() => setError(null)} />}
-          {documentLoading ? (
-            <div className="reader-state"><Spin size="large" /></div>
-          ) : document ? (
-            <article className="markdown-document">
-              <div className="document-path">{document.path}</div>
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ pre: MarkdownPre }}>
-                {document.content}
-              </ReactMarkdown>
-            </article>
-          ) : (
-            <div className="reader-state">
-              <BookOpen size={32} strokeWidth={1.4} aria-hidden="true" />
-              <Typography.Title level={3}>{activeProject ? "从目录中选择文档" : "选择项目开始阅读"}</Typography.Title>
-            </div>
-          )}
+          {managementOpen ? <ManagementCenter
+            open
+            onClose={() => setManagementOpen(false)}
+            token={sessionStorage.getItem(TOKEN_KEY)}
+            isSystemAdmin={user.role === "system_admin"}
+            manageableProjects={projects.filter((project) => project.role === "project_admin")}
+          /> : <>
+            {error && <Alert className="workspace-error" type="error" showIcon message={error} closable onClose={() => setError(null)} />}
+            {documentLoading ? <div className="reader-state"><Spin size="large" /></div> : document ? <article className="markdown-document"><div className="document-path">{document.path}</div><ReactMarkdown remarkPlugins={[remarkGfm]} components={{ pre: MarkdownPre }}>{document.content}</ReactMarkdown></article> : <div className="reader-state"><BookOpen size={32} strokeWidth={1.4} aria-hidden="true" /><Typography.Title level={3}>{activeProject ? "从目录中选择文档" : "选择项目开始阅读"}</Typography.Title></div>}
+          </>}
         </section>
       </div>
-
-      <ManagementCenter
-        open={managementOpen}
-        onClose={() => setManagementOpen(false)}
-        token={sessionStorage.getItem(TOKEN_KEY)}
-        isSystemAdmin={user.role === "system_admin"}
-        manageableProjects={projects.filter((project) => project.role === "project_admin")}
-      />
     </main>
   );
 }

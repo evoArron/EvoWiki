@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import secrets
 from datetime import UTC, datetime, timedelta
 from os.path import commonpath
 from pathlib import Path
@@ -39,7 +40,6 @@ class ChangePasswordRequest(BaseModel):
 class CreateMemberRequest(BaseModel):
     username: str
     display_name: str = Field(min_length=1, max_length=128)
-    password: str
 
 
 class UpdateMemberRequest(BaseModel):
@@ -86,6 +86,10 @@ class CurrentUserResponse(BaseModel):
     role: str
     is_active: bool
     must_change_password: bool
+
+
+class CreatedMemberResponse(CurrentUserResponse):
+    temporary_password: str
 
 
 class ProjectResponse(BaseModel):
@@ -254,13 +258,14 @@ def create_app(
     def list_members(_: User = Depends(admin_user), session: Session = Depends(get_session)) -> list[CurrentUserResponse]:
         return [member_response(member) for member in session.scalars(select(User).order_by(User.username))]
 
-    @app.post("/api/admin/members", status_code=status.HTTP_201_CREATED, response_model=CurrentUserResponse)
-    @app.post("/api/admin/users", status_code=status.HTTP_201_CREATED, response_model=CurrentUserResponse)
-    def create_member(request: CreateMemberRequest, session: Session = Depends(get_session), admin: User = Depends(admin_user)) -> CurrentUserResponse:
+    @app.post("/api/admin/members", status_code=status.HTTP_201_CREATED, response_model=CreatedMemberResponse)
+    @app.post("/api/admin/users", status_code=status.HTTP_201_CREATED, response_model=CreatedMemberResponse)
+    def create_member(request: CreateMemberRequest, session: Session = Depends(get_session), admin: User = Depends(admin_user)) -> CreatedMemberResponse:
         if find_user(session, request.username):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="登录名已存在")
+        temporary_password = secrets.token_urlsafe(12)
         try:
-            password_hash = bcrypt.hashpw(request.password.encode(), bcrypt.gensalt()).decode()
+            password_hash = bcrypt.hashpw(temporary_password.encode(), bcrypt.gensalt()).decode()
         except ValueError:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="密码过长") from None
         member = User(username=request.username, display_name=request.display_name, password_hash=password_hash, role="member", must_change_password=True)
@@ -268,7 +273,7 @@ def create_app(
         session.flush()
         audit(session, admin, "member.created", "member", member.username, after={"display_name": member.display_name, "role": member.role})
         session.commit()
-        return member_response(member)
+        return CreatedMemberResponse(**member_response(member).model_dump(), temporary_password=temporary_password)
 
     @app.patch("/api/admin/members/{username}", response_model=CurrentUserResponse)
     def update_member(username: str, request: UpdateMemberRequest, session: Session = Depends(get_session), admin: User = Depends(admin_user)) -> CurrentUserResponse:

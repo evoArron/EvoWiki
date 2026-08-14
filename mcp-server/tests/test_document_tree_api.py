@@ -23,10 +23,10 @@ def login(client: TestClient, username: str, password: str) -> dict[str, str]:
 
 def create_authorized_reader(client: TestClient) -> dict[str, str]:
     admin_headers = login(client, "admin", "correct-horse-battery-staple")
-    client.post(
+    member = client.post(
         "/api/admin/users",
         headers=admin_headers,
-        json={"username": "reader", "display_name": "Reader", "password": "reader-password"},
+        json={"username": "reader", "display_name": "Reader"},
     )
     client.post("/api/admin/projects", headers=admin_headers, json={"project_id": "alpha"})
     client.post(
@@ -34,11 +34,12 @@ def create_authorized_reader(client: TestClient) -> dict[str, str]:
         headers=admin_headers,
         json={"username": "reader", "role": "viewer"},
     )
-    temporary_headers = login(client, "reader", "reader-password")
+    temporary_password = member.json()["temporary_password"]
+    temporary_headers = login(client, "reader", temporary_password)
     response = client.post(
         "/api/auth/change-password",
         headers=temporary_headers,
-        json={"current_password": "reader-password", "new_password": "reader-password-active"},
+        json={"current_password": temporary_password, "new_password": "reader-password-active"},
     )
     assert response.status_code == 204
     return login(client, "reader", "reader-password-active")

@@ -11,7 +11,7 @@
 *   **文档语言**：新增或修改的项目文档使用中文撰写；技术专有名词、命令、标识符和代码可保留原文。
 
 ## 🔎 GitNexus 强制工作流
-*   **GitNexus CLI 必须执行**：每个涉及代码理解、调试、影响评估、重构或提交的任务，先运行 `gitnexus status`；索引缺失或过期时运行 `gitnexus analyze`。
+*   **GitNexus CLI 必须执行**：每个涉及代码理解、调试、影响评估、重构或提交的任务，先运行 `gitnexus status`；索引缺失或过期时运行 `gitnexus analyze --skip-agents-md`，不得生成或维护 `CLAUDE.md`、`.claude/`。
 *   **代码导航必须基于索引**：分别使用 `gitnexus query`、`gitnexus context`、`gitnexus impact` 和 `gitnexus detect-changes` 完成调用链定位、符号上下文、改动影响与提交前范围校验；代码提交后刷新索引。
 
 ## 🏃‍♂️ 2. 任务执行序列 (Execution Sequence)

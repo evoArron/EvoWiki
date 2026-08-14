@@ -31,14 +31,14 @@ def test_member_must_change_temporary_password_before_using_workspace(tmp_path):
     created = client.post(
         "/api/admin/members",
         headers=bearer(admin_token),
-        json={"username": "reviewer", "display_name": "Review User", "password": "temporary-password"},
+        json={"username": "reviewer", "display_name": "Review User"},
     )
-    member_token = login(client, "reviewer", "temporary-password")
+    member_token = login(client, "reviewer", created.json()["temporary_password"])
     blocked = client.get("/api/projects", headers=bearer(member_token))
     changed = client.post(
         "/api/auth/change-password",
         headers=bearer(member_token),
-        json={"current_password": "temporary-password", "new_password": "new-password"},
+        json={"current_password": created.json()["temporary_password"], "new_password": "new-password"},
     )
     refreshed_token = login(client, "reviewer", "new-password")
 
@@ -52,12 +52,12 @@ def test_member_must_change_temporary_password_before_using_workspace(tmp_path):
 def test_password_reset_invalidates_old_token_and_audit_is_redacted(tmp_path):
     client = TestClient(create_test_app(tmp_path))
     admin_token = login(client, "admin", "correct-horse-battery-staple")
-    client.post(
+    created = client.post(
         "/api/admin/members",
         headers=bearer(admin_token),
-        json={"username": "reviewer", "display_name": "Review User", "password": "temporary-password"},
+        json={"username": "reviewer", "display_name": "Review User"},
     )
-    member_token = login(client, "reviewer", "temporary-password")
+    member_token = login(client, "reviewer", created.json()["temporary_password"])
 
     reset = client.post(
         "/api/admin/members/reviewer/reset-password",
@@ -76,16 +76,16 @@ def test_password_reset_invalidates_old_token_and_audit_is_redacted(tmp_path):
 def test_project_owner_is_project_admin_and_archived_projects_reject_permission_changes(tmp_path):
     client = TestClient(create_test_app(tmp_path))
     admin_token = login(client, "admin", "correct-horse-battery-staple")
-    client.post(
+    created = client.post(
         "/api/admin/members",
         headers=bearer(admin_token),
-        json={"username": "owner", "display_name": "Project Owner", "password": "temporary-password"},
+        json={"username": "owner", "display_name": "Project Owner"},
     )
-    owner_token = login(client, "owner", "temporary-password")
+    owner_token = login(client, "owner", created.json()["temporary_password"])
     client.post(
         "/api/auth/change-password",
         headers=bearer(owner_token),
-        json={"current_password": "temporary-password", "new_password": "owner-password"},
+        json={"current_password": created.json()["temporary_password"], "new_password": "owner-password"},
     )
     client.post(
         "/api/admin/projects",
