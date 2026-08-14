@@ -325,7 +325,7 @@ export function App() {
             <strong>{user.username}</strong>
             <span>{user.role === "system_admin" ? "系统管理员" : user.role}</span>
           </div>
-          {(user.role === "system_admin" || projects.some((project) => project.role === "project_admin")) && (
+          {user.role === "system_admin" && (
             <Tooltip title="管理">
               <Button aria-label="管理" className="header-icon-button" icon={<Settings size={18} />} type="text" onClick={() => setManagementOpen(true)} />
             </Tooltip>

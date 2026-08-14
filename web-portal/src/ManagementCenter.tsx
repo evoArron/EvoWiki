@@ -173,7 +173,7 @@ export function ManagementCenter({ open, onClose, token, isSystemAdmin, manageab
         const created = memberDrawer === "create";
         const saved = created ? await fetch(`${API}/api/admin/members`, { method: "POST", headers, body: JSON.stringify(values) }).then(async (response) => { if (!response.ok) { setError(await errorText(response)); return false; } const member = await response.json() as { temporary_password: string }; setTemporaryPassword(member.temporary_password); await load(); return true; }) : selectedMember && await submit(`/api/admin/members/${selectedMember.username}`, "PATCH", { display_name: values.display_name });
         if (saved && !created && values.role !== selectedMember?.role && !(await submit(`/api/admin/members/${selectedMember!.username}/system-role`, "POST", { role: values.role }))) return;
-        if (saved) setMemberDrawer(null);
+        if (saved && !created) setMemberDrawer(null);
       }}>
         {memberDrawer === "create" && <><Form.Item label="登录名" name="username" rules={[{ required: true, message: "请输入登录名" }]}><Input /></Form.Item>{temporaryPassword && <Alert type="success" message="临时密码仅显示一次" description={temporaryPassword} showIcon />}</>}
         <Form.Item label="姓名" name="display_name" rules={[{ required: true, message: "请输入姓名" }]}><Input /></Form.Item>

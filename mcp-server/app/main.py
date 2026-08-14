@@ -385,6 +385,8 @@ def create_app(
         project = find_project(session, project_id)
         if project is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="项目不存在")
+        if project.status != "active":
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="项目已归档")
         project.status = "archived"
         audit(session, admin, "project.archived", "project", project_id, {"status": "active"}, {"status": "archived"}, project_id)
         session.commit()
@@ -395,6 +397,8 @@ def create_app(
         project = find_project(session, project_id)
         if project is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="项目不存在")
+        if project.status != "archived":
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="项目未归档")
         project.status = "active"
         audit(session, admin, "project.restored", "project", project_id, {"status": "archived"}, {"status": "active"}, project_id)
         session.commit()

@@ -106,6 +106,23 @@ def test_project_owner_is_project_admin_and_archived_projects_reject_permission_
     assert denied.status_code == 403
 
 
+def test_project_archive_and_restore_reject_repeated_transitions_without_audit(tmp_path):
+    client = TestClient(create_test_app(tmp_path))
+    admin_token = login(client, "admin", "correct-horse-battery-staple")
+    headers = bearer(admin_token)
+    client.post("/api/admin/projects", headers=headers, json={"project_id": "alpha", "name": "Alpha"})
+
+    assert client.post("/api/admin/projects/alpha/archive", headers=headers).status_code == 200
+    audit_total = client.get("/api/admin/audit-logs", headers=headers).json()["total"]
+    repeated_archive = client.post("/api/admin/projects/alpha/archive", headers=headers)
+    repeated_restore = client.post("/api/admin/projects/alpha/restore", headers=headers)
+
+    assert repeated_archive.status_code == 409
+    assert repeated_restore.status_code == 200
+    assert client.post("/api/admin/projects/alpha/restore", headers=headers).status_code == 409
+    assert client.get("/api/admin/audit-logs", headers=headers).json()["total"] == audit_total + 1
+
+
 def test_project_permission_put_uses_path_member_identity(tmp_path):
     client = TestClient(create_test_app(tmp_path))
     admin_token = login(client, "admin", "correct-horse-battery-staple")
