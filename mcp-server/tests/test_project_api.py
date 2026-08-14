@@ -39,10 +39,16 @@ def test_admin_can_grant_project_access_to_a_member(tmp_path):
         headers=admin_headers,
         json={"username": "reviewer", "role": "viewer"},
     )
+    missing_project = client.post(
+        "/api/admin/projects/missing/permissions",
+        headers=admin_headers,
+        json={"username": "reviewer", "role": "viewer"},
+    )
 
     assert member.status_code == 201
     assert project.status_code == 201
     assert permission.status_code == 200
+    assert missing_project.status_code == 404
     assert (tmp_path / "enterprise-wiki-repo" / "alpha" / "docs").is_dir()
 
     member_headers = login(client, "reviewer", "reviewer-password")

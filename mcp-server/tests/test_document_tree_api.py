@@ -1,3 +1,5 @@
+import os
+
 from fastapi.testclient import TestClient
 
 from app.main import create_app
@@ -56,3 +58,27 @@ def test_document_tree_rejects_unassigned_projects_and_paths_outside_docs(tmp_pa
 
     assert unknown_project.status_code == 403
     assert escaped_path.status_code == 422
+
+
+def test_document_tree_rejects_docs_symlink_outside_project(tmp_path):
+    app = create_app(
+        database_path=tmp_path / "evowiki.db",
+        database_root=tmp_path,
+        wiki_root=tmp_path / "enterprise-wiki-repo",
+        jwt_secret="test-secret",
+        initial_admin_username="admin",
+        initial_admin_password="correct-horse-battery-staple",
+    )
+    client = TestClient(app)
+    token = client.post("/api/auth/login", json={"username": "admin", "password": "correct-horse-battery-staple"}).json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    client.post("/api/admin/projects", headers=headers, json={"project_id": "alpha"})
+    docs = tmp_path / "enterprise-wiki-repo" / "alpha" / "docs"
+    docs.rmdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    os.symlink(outside, docs, target_is_directory=True)
+
+    response = client.get("/api/projects/alpha/tree", headers=headers)
+
+    assert response.status_code == 422

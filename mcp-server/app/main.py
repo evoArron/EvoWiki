@@ -183,7 +183,9 @@ def create_app(
         session: Session = Depends(get_session),
         _: User = Depends(admin_user),
     ) -> ProjectResponse:
-        safe_project_path(wiki_root, project_id)
+        project_path = safe_project_path(wiki_root, project_id)
+        if not project_path.is_dir():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="项目不存在")
         if request.role not in {"viewer", "editor"}:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效项目角色")
         user = find_user(session, request.username)
@@ -243,7 +245,10 @@ def safe_project_path(wiki_root: Path, project_id: str) -> Path:
 
 
 def safe_document_directory(project_path: Path, path: str) -> Path:
+    resolved_project_path = project_path.resolve()
     docs_root = (project_path / "docs").resolve()
+    if commonpath([str(resolved_project_path), str(docs_root)]) != str(resolved_project_path):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="无效文档根目录")
     directory = (project_path / path).resolve()
     if commonpath([str(docs_root), str(directory)]) != str(docs_root):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="无效文档路径")
