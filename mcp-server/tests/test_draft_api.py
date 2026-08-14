@@ -56,6 +56,32 @@ def test_editor_can_review_reject_and_publish_a_draft_without_indexing_before_pu
     assert client.get("/api/projects/alpha/documents", headers=editor_headers, params={"path": "docs/architecture.md"}).json() == {"path": "docs/architecture.md", "content": "# Ready", "git_commit": "test-commit"}
 
 
+def test_failed_push_is_not_indexed_and_retry_does_not_create_another_commit(tmp_path):
+    attempts = {"push": 0, "commit": 0}
+    indexed = []
+    def git_runner(arguments, _):
+        if arguments[0] == "commit": attempts["commit"] += 1
+        if arguments == ["push"]:
+            attempts["push"] += 1
+            if attempts["push"] == 1: raise RuntimeError("remote unavailable")
+        return "test-commit\n" if arguments == ["rev-parse", "HEAD"] else ""
+
+    client, _ = create_test_app(tmp_path, git_runner=git_runner, indexer=lambda *record: indexed.append(record))
+    admin_headers = login(client, "admin", "correct-horse-battery-staple")
+    editor_headers = create_editor(client, admin_headers)
+    draft = client.post("/api/projects/alpha/drafts", headers=editor_headers, json={"path": "retry.md", "content": "# Retry"}).json()
+    failed = client.post(f"/api/projects/alpha/drafts/{draft['id']}/publish", headers=editor_headers, json={"target_path": "retry.md"})
+
+    assert failed.json()["status"] == "failed"
+    assert indexed == []
+
+    retried = client.post(f"/api/projects/alpha/drafts/{draft['id']}/retry", headers=editor_headers)
+
+    assert retried.json()["status"] == "indexed"
+    assert attempts == {"push": 2, "commit": 1}
+    assert indexed == [("alpha", "alpha/docs/retry.md", "# Retry", "test-commit")]
+
+
 def test_draft_upload_rejects_viewers_non_markdown_and_escaped_paths(tmp_path):
     client, _ = create_test_app(tmp_path)
     admin_headers = login(client, "admin", "correct-horse-battery-staple")
