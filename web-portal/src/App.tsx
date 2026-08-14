@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { isValidElement, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Alert, Button, Card, Divider, Form, Input, List, Select, Spin, Tree, Typography } from "antd";
 import type { DataNode } from "antd/es/tree";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 const TOKEN_KEY = "evowiki.access-token";
@@ -24,6 +26,58 @@ type DocumentNode = {
 type LoginResponse = {
   access_token: string;
 };
+
+type Document = {
+  path: string;
+  content: string;
+};
+
+function MermaidDiagram({ chart }: { chart: string }) {
+  const [open, setOpen] = useState(false);
+  const container = useRef<HTMLDivElement>(null);
+  const diagramId = useId().replace(/:/g, "");
+
+  useEffect(() => {
+    if (!open || !container.current) {
+      return;
+    }
+    let cancelled = false;
+    void import("mermaid")
+      .then(({ default: mermaid }) => {
+        mermaid.initialize({ startOnLoad: false, securityLevel: "strict" });
+        return mermaid.render(diagramId, chart);
+      })
+      .then(({ svg, bindFunctions }) => {
+        if (cancelled || !container.current) {
+          return;
+        }
+        container.current.innerHTML = svg;
+        bindFunctions?.(container.current);
+      })
+      .catch(() => {
+        if (!cancelled && container.current) {
+          container.current.textContent = "图表无法渲染";
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [chart, diagramId, open]);
+
+  return (
+    <details className="mermaid-details" onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary>Mermaid</summary>
+      {open && <div ref={container} />}
+    </details>
+  );
+}
+
+function MarkdownPre({ children }: { children?: ReactNode }) {
+  if (isValidElement<{ className?: string; children?: ReactNode }>(children) && children.props.className === "language-mermaid") {
+    return <MermaidDiagram chart={String(children.props.children).replace(/\n$/, "")} />;
+  }
+  return <pre>{children}</pre>;
+}
 
 class ApiError extends Error {
   constructor(readonly status: number) {
@@ -65,8 +119,11 @@ export function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeProject, setActiveProject] = useState<string | null>(null);
   const [treeData, setTreeData] = useState<DataNode[]>([]);
+  const [document, setDocument] = useState<Document | null>(null);
   const treeRequest = useRef(0);
+  const documentRequest = useRef(0);
   const [loading, setLoading] = useState(true);
+  const [documentLoading, setDocumentLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -156,8 +213,11 @@ export function App() {
 
   async function selectProject(projectId: string) {
     const requestId = ++treeRequest.current;
+    ++documentRequest.current;
     setError(null);
     setActiveProject(projectId);
+    setDocument(null);
+    setDocumentLoading(false);
     try {
       const nodes = await loadTree(projectId);
       if (requestId === treeRequest.current) {
@@ -182,9 +242,44 @@ export function App() {
     }
   }
 
+  async function openDocument(path: string) {
+    const token = sessionStorage.getItem(TOKEN_KEY);
+    if (!token || !activeProject) {
+      return;
+    }
+    const requestId = ++documentRequest.current;
+    setError(null);
+    setDocumentLoading(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/projects/${activeProject}/documents?path=${encodeURIComponent(path)}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!response.ok) {
+        throw new ApiError(response.status);
+      }
+      const nextDocument = (await response.json()) as Document;
+      if (requestId === documentRequest.current) {
+        setDocument(nextDocument);
+      }
+    } catch {
+      if (requestId === documentRequest.current) {
+        setError("无法读取文档");
+      }
+    } finally {
+      if (requestId === documentRequest.current) {
+        setDocumentLoading(false);
+      }
+    }
+  }
+
   function logout() {
+    ++documentRequest.current;
     sessionStorage.removeItem(TOKEN_KEY);
+    setActiveProject(null);
+    setDocument(null);
     setProjects([]);
+    setTreeData([]);
     setUser(null);
   }
 
@@ -215,7 +310,7 @@ export function App() {
 
   return (
     <main className="identity-page">
-      <Card title="EvoWiki" className="identity-card">
+      <Card title="EvoWiki" className={activeProject ? "identity-card document-card" : "identity-card"}>
         <Typography.Paragraph>当前身份：{user.username}</Typography.Paragraph>
         <Typography.Paragraph>角色：{user.role}</Typography.Paragraph>
         <Button onClick={logout}>退出登录</Button>
@@ -231,7 +326,29 @@ export function App() {
             </List.Item>
           )}
         />
-        {activeProject && <Tree className="document-tree" loadData={loadTreeChildren} treeData={treeData} />}
+        {activeProject && (
+          <>
+            <Tree
+              className="document-tree"
+              loadData={loadTreeChildren}
+              onSelect={(_, info) => {
+                if (info.node.isLeaf) {
+                  void openDocument(String(info.node.key));
+                }
+              }}
+              treeData={treeData}
+            />
+            {documentLoading && <Spin />}
+            {document && (
+              <article className="markdown-document">
+                <Typography.Title level={2}>{document.path}</Typography.Title>
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ pre: MarkdownPre }}>
+                  {document.content}
+                </ReactMarkdown>
+              </article>
+            )}
+          </>
+        )}
 
         {user.role === "admin" && (
           <>

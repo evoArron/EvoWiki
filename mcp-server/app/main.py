@@ -67,6 +67,11 @@ class TreeNode(BaseModel):
     is_leaf: bool
 
 
+class DocumentResponse(BaseModel):
+    path: str
+    content: str
+
+
 def required_environment(name: str) -> str:
     value = os.getenv(name)
     if not value:
@@ -231,6 +236,21 @@ def create_app(
             if entry.is_dir() or entry.suffix == ".md"
         ]
 
+    @app.get("/api/projects/{project_id}/documents", response_model=DocumentResponse)
+    def read_document(
+        project_id: str,
+        path: str,
+        user: User = Depends(current_user),
+        session: Session = Depends(get_session),
+    ) -> DocumentResponse:
+        if find_project_permission(session, user.id, project_id) is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="没有项目权限")
+        project_path = safe_project_path(wiki_root, project_id)
+        document_path = safe_markdown_document_path(project_path, path)
+        if not document_path.is_file():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文档不存在")
+        return DocumentResponse(path=str(document_path.relative_to(project_path)), content=document_path.read_text(encoding="utf-8"))
+
     return app
 
 
@@ -253,6 +273,13 @@ def safe_document_directory(project_path: Path, path: str) -> Path:
     if commonpath([str(docs_root), str(directory)]) != str(docs_root):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="无效文档路径")
     return directory
+
+
+def safe_markdown_document_path(project_path: Path, path: str) -> Path:
+    document_path = safe_document_directory(project_path, path)
+    if document_path.suffix != ".md":
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="仅支持 Markdown 文档")
+    return document_path
 
 
 def seed_admin(factory: sessionmaker[Session], username: str, password: str) -> None:

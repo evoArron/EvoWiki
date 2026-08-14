@@ -24,6 +24,32 @@ body {
   width: 100%;
 }
 
+.document-card {
+  max-width: 960px;
+}
+
+.markdown-document {
+  line-height: 1.7;
+  margin-top: 24px;
+  overflow-wrap: anywhere;
+}
+
+.markdown-document pre {
+  overflow-x: auto;
+}
+
+.mermaid-details {
+  margin: 16px 0;
+}
+
+.mermaid-details summary {
+  cursor: pointer;
+}
+
+.mermaid-details svg {
+  max-width: 100%;
+}
+
 .login-error {
   margin-bottom: 16px;
 }
