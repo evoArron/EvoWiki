@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import { Alert, Button, Card, Divider, Form, Input, List, Select, Spin, Typography } from "antd";
+import { useEffect, useRef, useState } from "react";
+import { Alert, Button, Card, Divider, Form, Input, List, Select, Spin, Tree, Typography } from "antd";
+import type { DataNode } from "antd/es/tree";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 const TOKEN_KEY = "evowiki.access-token";
@@ -12,6 +13,12 @@ type CurrentUser = {
 type Project = {
   project_id: string;
   role: string;
+};
+
+type DocumentNode = {
+  title: string;
+  key: string;
+  is_leaf: boolean;
 };
 
 type LoginResponse = {
@@ -44,9 +51,21 @@ async function readProjects(token: string): Promise<Project[]> {
   return response.json() as Promise<Project[]>;
 }
 
+function replaceChildren(nodes: DataNode[], key: string, children: DataNode[]): DataNode[] {
+  return nodes.map((node) => {
+    if (node.key === key) {
+      return { ...node, children };
+    }
+    return node.children ? { ...node, children: replaceChildren(node.children, key, children) } : node;
+  });
+}
+
 export function App() {
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [activeProject, setActiveProject] = useState<string | null>(null);
+  const [treeData, setTreeData] = useState<DataNode[]>([]);
+  const treeRequest = useRef(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -120,6 +139,49 @@ export function App() {
     }
   }
 
+  async function loadTree(projectId: string, path = "docs"): Promise<DataNode[]> {
+    const token = sessionStorage.getItem(TOKEN_KEY);
+    if (!token) {
+      return [];
+    }
+    const response = await fetch(`${API_BASE_URL}/api/projects/${projectId}/tree?path=${encodeURIComponent(path)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) {
+      throw new ApiError(response.status);
+    }
+    const nodes = (await response.json()) as DocumentNode[];
+    return nodes.map((node) => ({ title: node.title, key: node.key, isLeaf: node.is_leaf }));
+  }
+
+  async function selectProject(projectId: string) {
+    const requestId = ++treeRequest.current;
+    setError(null);
+    setActiveProject(projectId);
+    try {
+      const nodes = await loadTree(projectId);
+      if (requestId === treeRequest.current) {
+        setTreeData(nodes);
+      }
+    } catch {
+      if (requestId === treeRequest.current) {
+        setError("无法读取项目文档树");
+      }
+    }
+  }
+
+  async function loadTreeChildren(node: DataNode) {
+    if (!activeProject || node.isLeaf) {
+      return;
+    }
+    try {
+      const children = await loadTree(activeProject, String(node.key));
+      setTreeData((current) => replaceChildren(current, String(node.key), children));
+    } catch {
+      setError("无法读取项目文档树");
+    }
+  }
+
   function logout() {
     sessionStorage.removeItem(TOKEN_KEY);
     setProjects([]);
@@ -163,8 +225,13 @@ export function App() {
         <List
           dataSource={projects}
           locale={{ emptyText: "暂无授权项目" }}
-          renderItem={(project) => <List.Item>{project.project_id}（{project.role}）</List.Item>}
+          renderItem={(project) => (
+            <List.Item actions={[<Button key={project.project_id} onClick={() => selectProject(project.project_id)}>浏览文档</Button>]}>
+              {project.project_id}（{project.role}）
+            </List.Item>
+          )}
         />
+        {activeProject && <Tree className="document-tree" loadData={loadTreeChildren} treeData={treeData} />}
 
         {user.role === "admin" && (
           <>

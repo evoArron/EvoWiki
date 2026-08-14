@@ -6,7 +6,7 @@ from pathlib import Path
 
 import bcrypt
 import jwt
-from fastapi import Depends, FastAPI, Header, HTTPException, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -59,6 +59,12 @@ class CurrentUserResponse(BaseModel):
 class ProjectResponse(BaseModel):
     project_id: str
     role: str
+
+
+class TreeNode(BaseModel):
+    title: str
+    key: str
+    is_leaf: bool
 
 
 def required_environment(name: str) -> str:
@@ -199,6 +205,30 @@ def create_app(
         )
         return [ProjectResponse(project_id=permission.project_id, role=permission.role) for permission in permissions]
 
+    @app.get("/api/projects/{project_id}/tree", response_model=list[TreeNode])
+    def read_project_tree(
+        project_id: str,
+        path: str = Query(default="docs"),
+        user: User = Depends(current_user),
+        session: Session = Depends(get_session),
+    ) -> list[TreeNode]:
+        if find_project_permission(session, user.id, project_id) is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="没有项目权限")
+        project_path = safe_project_path(wiki_root, project_id)
+        directory = safe_document_directory(project_path, path)
+        if not directory.is_dir():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="目录不存在")
+
+        return [
+            TreeNode(
+                title=entry.name,
+                key=str(entry.relative_to(project_path)),
+                is_leaf=entry.is_file(),
+            )
+            for entry in sorted(directory.iterdir(), key=lambda item: (item.is_file(), item.name))
+            if entry.is_dir() or entry.suffix == ".md"
+        ]
+
     return app
 
 
@@ -210,6 +240,14 @@ def safe_project_path(wiki_root: Path, project_id: str) -> Path:
     if commonpath([str(resolved_root), str(project_path)]) != str(resolved_root):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效项目路径")
     return project_path
+
+
+def safe_document_directory(project_path: Path, path: str) -> Path:
+    docs_root = (project_path / "docs").resolve()
+    directory = (project_path / path).resolve()
+    if commonpath([str(docs_root), str(directory)]) != str(docs_root):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="无效文档路径")
+    return directory
 
 
 def seed_admin(factory: sessionmaker[Session], username: str, password: str) -> None:
