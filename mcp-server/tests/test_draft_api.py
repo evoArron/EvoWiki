@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from app.main import create_app
+from app.publishing import ChromaIndexer
 
 
 def create_test_app(tmp_path, git_runner=None, indexer=None):
@@ -54,6 +55,17 @@ def test_editor_can_review_reject_and_publish_a_draft_without_indexing_before_pu
     assert indexed == [("alpha", "alpha/docs/architecture.md", "# Ready", "test-commit")]
     assert (tmp_path / "enterprise-wiki-repo" / "alpha" / "docs" / "architecture.md").read_text() == "# Ready"
     assert client.get("/api/projects/alpha/documents", headers=editor_headers, params={"path": "docs/architecture.md"}).json() == {"path": "docs/architecture.md", "content": "# Ready", "git_commit": "test-commit"}
+
+
+def test_chroma_indexer_keeps_code_fences_whole_and_returns_source_metadata(tmp_path):
+    indexer = ChromaIndexer(tmp_path / "chroma")
+    indexer("alpha", "alpha/docs/design.md", "# Design\n```python\n# not a heading\n```\n# API\ncontent", "commit-1")
+
+    results = indexer.search(["alpha"], "API")
+
+    assert results
+    assert all(result["path"] == "alpha/docs/design.md" and result["git_commit"] == "commit-1" for result in results)
+    assert any("# not a heading" in result["chunk"] for result in results)
 
 
 def test_failed_push_is_not_indexed_and_retry_does_not_create_another_commit(tmp_path):

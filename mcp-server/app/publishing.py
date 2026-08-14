@@ -120,7 +120,7 @@ class ChromaIndexer:
 
     def __call__(self, project_id: str, path: str, content: str, git_commit: str) -> None:
         chunks = chunk_markdown(content)
-        self.collection.delete(where={"project_id": project_id, "path": path})
+        self.collection.delete(where={"$and": [{"project_id": project_id}, {"path": path}]})
         self.collection.upsert(
             ids=[f"{project_id}:{path}:{git_commit}:{index}" for index, _ in enumerate(chunks)],
             documents=[chunk for _, chunk in chunks],
