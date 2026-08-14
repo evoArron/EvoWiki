@@ -1,7 +1,7 @@
 html,
 body,
 #root {
-  min-height: 100%;
+  height: 100%;
   margin: 0;
 }
 
@@ -9,6 +9,7 @@ body {
   background: #f4f7f8;
   color: #17212b;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  overflow: hidden;
 }
 
 button,
@@ -41,7 +42,8 @@ input {
 
 .workspace-page {
   background: #f4f7f8;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .workspace-header {
@@ -125,15 +127,16 @@ input {
 .workspace-shell {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
-  min-height: 100vh;
-  padding-top: 56px;
+  height: calc(100vh - 56px);
+  margin-top: 56px;
+  min-height: 0;
 }
 
 .workspace-sidebar {
   background: #ffffff;
   border-right: 1px solid #dce4e8;
-  min-height: calc(100vh - 56px);
-  overflow-y: auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .project-section,
@@ -234,7 +237,10 @@ input {
 }
 
 .reader-panel {
+  box-sizing: border-box;
+  min-height: 0;
   min-width: 0;
+  overflow-y: auto;
   padding: 30px clamp(24px, 5vw, 76px) 64px;
 }
 
