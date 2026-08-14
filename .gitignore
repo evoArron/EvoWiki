@@ -5,5 +5,7 @@ __pycache__/
 *.egg-info/
 node_modules/
 dist/
+web-portal/.pi/
+web-portal/skills-lock.json
 .env
 *.db
