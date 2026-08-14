@@ -1,27 +1,6 @@
 from fastapi.testclient import TestClient
 
-from app.main import create_app
-
-
-def create_test_app(tmp_path):
-    return create_app(
-        database_path=tmp_path / "evowiki.db",
-        database_root=tmp_path,
-        wiki_root=tmp_path / "enterprise-wiki-repo",
-        jwt_secret="test-secret",
-        initial_admin_username="admin",
-        initial_admin_password="correct-horse-battery-staple",
-    )
-
-
-def login(client: TestClient, username: str, password: str) -> str:
-    response = client.post("/api/auth/login", json={"username": username, "password": password})
-    assert response.status_code == 200
-    return response.json()["access_token"]
-
-
-def bearer(token: str) -> dict[str, str]:
-    return {"Authorization": f"Bearer {token}"}
+from conftest import ADMIN_PASSWORD, bearer, create_test_app, login
 
 
 def test_member_must_change_temporary_password_before_using_workspace(tmp_path):

@@ -511,7 +511,7 @@ def create_app(
     @app.get("/api/projects/{project_id}/drafts", response_model=list[PublicationResponse])
     def list_drafts(project_id: str, user: User = Depends(ready_user), session: Session = Depends(get_session)) -> list[PublicationResponse]:
         project_access(project_id, user, session, require_write=True)
-        return [publication_response(item) for item in session.scalars(select(Publication).where(Publication.project_id == project_id, Publication.status == "pending").order_by(Publication.id))]
+        return [publication_response(item) for item in session.scalars(select(Publication).where(Publication.project_id == project_id, Publication.status.in_(("pending", "failed"))).order_by(Publication.id))]
 
     @app.get("/api/projects/{project_id}/drafts/{publication_id}", response_model=DocumentResponse)
     def read_draft(project_id: str, publication_id: int, user: User = Depends(ready_user), session: Session = Depends(get_session)) -> DocumentResponse:

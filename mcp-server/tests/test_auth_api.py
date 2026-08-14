@@ -1,17 +1,8 @@
 import pytest
 from fastapi.testclient import TestClient
 
+from conftest import ADMIN_PASSWORD, create_test_app
 from app.main import create_app
-
-
-def create_test_app(tmp_path):
-    return create_app(
-        database_path=tmp_path / "evowiki.db",
-        database_root=tmp_path,
-        jwt_secret="test-secret",
-        initial_admin_username="admin",
-        initial_admin_password="correct-horse-battery-staple",
-    )
 
 
 def test_admin_can_log_in_and_read_current_identity(tmp_path):
@@ -19,7 +10,7 @@ def test_admin_can_log_in_and_read_current_identity(tmp_path):
 
     login = client.post(
         "/api/auth/login",
-        json={"username": "admin", "password": "correct-horse-battery-staple"},
+        json={"username": "admin", "password": ADMIN_PASSWORD},
     )
 
     assert login.status_code == 200
