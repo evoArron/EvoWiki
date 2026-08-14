@@ -1,6 +1,7 @@
 import { isValidElement, useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { Alert, Button, Card, Divider, Form, Input, List, Select, Spin, Tree, Typography } from "antd";
+import { Alert, Button, Card, Drawer, Empty, Form, Input, Select, Spin, Tooltip, Tree, Typography } from "antd";
 import type { DataNode } from "antd/es/tree";
+import { BookOpen, FolderTree, LogOut, Settings } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -125,6 +126,7 @@ export function App() {
   const [loading, setLoading] = useState(true);
   const [documentLoading, setDocumentLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [managementOpen, setManagementOpen] = useState(false);
 
   useEffect(() => {
     const token = sessionStorage.getItem(TOKEN_KEY);
@@ -280,6 +282,7 @@ export function App() {
     setDocument(null);
     setProjects([]);
     setTreeData([]);
+    setManagementOpen(false);
     setUser(null);
   }
 
@@ -309,83 +312,117 @@ export function App() {
   }
 
   return (
-    <main className="identity-page">
-      <Card title="EvoWiki" className={activeProject ? "identity-card document-card" : "identity-card"}>
-        <Typography.Paragraph>当前身份：{user.username}</Typography.Paragraph>
-        <Typography.Paragraph>角色：{user.role}</Typography.Paragraph>
-        <Button onClick={logout}>退出登录</Button>
-        {error && <Alert className="login-error" type="error" showIcon message={error} />}
-
-        <Divider>我的项目</Divider>
-        <List
-          dataSource={projects}
-          locale={{ emptyText: "暂无授权项目" }}
-          renderItem={(project) => (
-            <List.Item actions={[<Button key={project.project_id} onClick={() => selectProject(project.project_id)}>浏览文档</Button>]}>
-              {project.project_id}（{project.role}）
-            </List.Item>
+    <main className="workspace-page">
+      <header className="workspace-header">
+        <div className="brand-mark" aria-label="EvoWiki">
+          <span className="brand-icon"><BookOpen size={20} aria-hidden="true" /></span>
+          <span>EvoWiki</span>
+          <span className="brand-context">项目文档工作台</span>
+        </div>
+        <div className="user-actions">
+          <div className="user-identity">
+            <strong>{user.username}</strong>
+            <span>{user.role === "admin" ? "管理员" : user.role}</span>
+          </div>
+          {user.role === "admin" && (
+            <Tooltip title="管理">
+              <Button aria-label="管理" className="header-icon-button" icon={<Settings size={18} />} type="text" onClick={() => setManagementOpen(true)} />
+            </Tooltip>
           )}
-        />
-        {activeProject && (
-          <>
-            <Tree
-              className="document-tree"
-              loadData={loadTreeChildren}
-              onSelect={(_, info) => {
-                if (info.node.isLeaf) {
-                  void openDocument(String(info.node.key));
-                }
-              }}
-              treeData={treeData}
-            />
-            {documentLoading && <Spin />}
-            {document && (
-              <article className="markdown-document">
-                <Typography.Title level={2}>{document.path}</Typography.Title>
-                <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ pre: MarkdownPre }}>
-                  {document.content}
-                </ReactMarkdown>
-              </article>
-            )}
-          </>
-        )}
+          <Tooltip title="退出登录">
+            <Button aria-label="退出登录" className="header-icon-button" icon={<LogOut size={18} />} type="text" onClick={logout} />
+          </Tooltip>
+        </div>
+      </header>
 
-        {user.role === "admin" && (
-          <>
-            <Divider>管理员操作</Divider>
-            <Form layout="vertical" onFinish={(values) => adminRequest("/api/admin/users", values)}>
-              <Form.Item label="新成员用户名" name="username" rules={[{ required: true, message: "请输入用户名" }]}>
-                <Input />
-              </Form.Item>
-              <Form.Item label="新成员密码" name="password" rules={[{ required: true, message: "请输入密码" }]}>
-                <Input.Password />
-              </Form.Item>
-              <Button htmlType="submit">创建成员</Button>
-            </Form>
-            <Form layout="vertical" onFinish={(values) => adminRequest("/api/admin/projects", values)}>
-              <Form.Item label="新项目标识" name="project_id" rules={[{ required: true, message: "请输入项目标识" }]}>
-                <Input placeholder="例如 alpha-project" />
-              </Form.Item>
-              <Button htmlType="submit">创建项目</Button>
-            </Form>
-            <Form
-              layout="vertical"
-              onFinish={(values) => adminRequest(`/api/admin/projects/${values.project_id}/permissions`, values)}
-            >
-              <Form.Item label="项目标识" name="project_id" rules={[{ required: true, message: "请输入项目标识" }]}>
-                <Input />
-              </Form.Item>
-              <Form.Item label="成员用户名" name="username" rules={[{ required: true, message: "请输入用户名" }]}>
-                <Input />
-              </Form.Item>
-              <Form.Item label="项目角色" name="role" rules={[{ required: true, message: "请选择项目角色" }]}>
-                <Select options={[{ value: "viewer", label: "查看者" }, { value: "editor", label: "编辑者" }]} />
-              </Form.Item>
-              <Button htmlType="submit">授予项目权限</Button>
-            </Form>
-          </>
-        )}
-      </Card>
+      <div className="workspace-shell">
+        <aside className="workspace-sidebar" aria-label="项目与文档导航">
+          <section className="project-section">
+            <div className="sidebar-heading">
+              <span>我的项目</span>
+              <span className="project-count">{projects.length}</span>
+            </div>
+            <nav className="project-list" aria-label="项目列表">
+              {projects.length ? projects.map((project) => (
+                <button
+                  className={activeProject === project.project_id ? "project-button active" : "project-button"}
+                  key={project.project_id}
+                  onClick={() => void selectProject(project.project_id)}
+                  type="button"
+                >
+                  <FolderTree size={16} aria-hidden="true" />
+                  <span>{project.project_id}</span>
+                  <small>{project.role}</small>
+                </button>
+              )) : <Empty className="sidebar-empty" description="暂无授权项目" image={Empty.PRESENTED_IMAGE_SIMPLE} />}
+            </nav>
+          </section>
+
+          <section className="tree-section">
+            <div className="sidebar-heading"><span>文档目录</span></div>
+            {activeProject ? (
+              <Tree
+                blockNode
+                className="document-tree"
+                loadData={loadTreeChildren}
+                onSelect={(_, info) => {
+                  if (info.node.isLeaf) {
+                    void openDocument(String(info.node.key));
+                  }
+                }}
+                showIcon={false}
+                treeData={treeData}
+              />
+            ) : <p className="tree-placeholder">选择项目后加载文档</p>}
+          </section>
+        </aside>
+
+        <section className="reader-panel" aria-label="文档阅读区">
+          {error && <Alert className="workspace-error" type="error" showIcon message={error} closable onClose={() => setError(null)} />}
+          {documentLoading ? (
+            <div className="reader-state"><Spin size="large" /></div>
+          ) : document ? (
+            <article className="markdown-document">
+              <div className="document-path">{document.path}</div>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ pre: MarkdownPre }}>
+                {document.content}
+              </ReactMarkdown>
+            </article>
+          ) : (
+            <div className="reader-state">
+              <BookOpen size={32} strokeWidth={1.4} aria-hidden="true" />
+              <Typography.Title level={3}>{activeProject ? "从目录中选择文档" : "选择项目开始阅读"}</Typography.Title>
+            </div>
+          )}
+        </section>
+      </div>
+
+      <Drawer className="management-drawer" open={managementOpen} title="工作台管理" width={400} onClose={() => setManagementOpen(false)}>
+        <section className="management-section">
+          <h3>创建成员</h3>
+          <Form layout="vertical" onFinish={(values) => adminRequest("/api/admin/users", values)}>
+            <Form.Item label="成员用户名" name="username" rules={[{ required: true, message: "请输入用户名" }]}><Input /></Form.Item>
+            <Form.Item label="初始密码" name="password" rules={[{ required: true, message: "请输入密码" }]}><Input.Password /></Form.Item>
+            <Button htmlType="submit" type="primary">创建成员</Button>
+          </Form>
+        </section>
+        <section className="management-section">
+          <h3>创建项目</h3>
+          <Form layout="vertical" onFinish={(values) => adminRequest("/api/admin/projects", values)}>
+            <Form.Item label="项目标识" name="project_id" rules={[{ required: true, message: "请输入项目标识" }]}><Input placeholder="例如 alpha-project" /></Form.Item>
+            <Button htmlType="submit">创建项目</Button>
+          </Form>
+        </section>
+        <section className="management-section">
+          <h3>授予项目权限</h3>
+          <Form layout="vertical" onFinish={(values) => adminRequest(`/api/admin/projects/${values.project_id}/permissions`, values)}>
+            <Form.Item label="项目标识" name="project_id" rules={[{ required: true, message: "请输入项目标识" }]}><Input /></Form.Item>
+            <Form.Item label="成员用户名" name="username" rules={[{ required: true, message: "请输入用户名" }]}><Input /></Form.Item>
+            <Form.Item label="项目角色" name="role" rules={[{ required: true, message: "请选择项目角色" }]}><Select options={[{ value: "viewer", label: "查看者" }, { value: "editor", label: "编辑者" }]} /></Form.Item>
+            <Button htmlType="submit">授予权限</Button>
+          </Form>
+        </section>
+      </Drawer>
     </main>
   );
 }

@@ -6,9 +6,14 @@ body,
 }
 
 body {
-  background: #f5f7fa;
-  color: #1f2937;
+  background: #f4f7f8;
+  color: #17212b;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+button,
+input {
+  font: inherit;
 }
 
 .identity-page {
@@ -24,32 +29,6 @@ body {
   width: 100%;
 }
 
-.document-card {
-  max-width: 960px;
-}
-
-.markdown-document {
-  line-height: 1.7;
-  margin-top: 24px;
-  overflow-wrap: anywhere;
-}
-
-.markdown-document pre {
-  overflow-x: auto;
-}
-
-.mermaid-details {
-  margin: 16px 0;
-}
-
-.mermaid-details summary {
-  cursor: pointer;
-}
-
-.mermaid-details svg {
-  max-width: 100%;
-}
-
 .login-error {
   margin-bottom: 16px;
 }
@@ -58,4 +37,369 @@ body {
   display: grid;
   min-height: 100vh;
   place-items: center;
+}
+
+.workspace-page {
+  background: #f4f7f8;
+  min-height: 100vh;
+}
+
+.workspace-header {
+  align-items: center;
+  background: #ffffff;
+  border-bottom: 1px solid #dce4e8;
+  display: flex;
+  height: 56px;
+  justify-content: space-between;
+  left: 0;
+  padding: 0 20px;
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 10;
+}
+
+.brand-mark,
+.user-actions,
+.user-identity,
+.project-button {
+  align-items: center;
+  display: flex;
+}
+
+.brand-mark {
+  color: #122c3d;
+  font-size: 17px;
+  font-weight: 700;
+  gap: 9px;
+}
+
+.brand-icon {
+  align-items: center;
+  background: #0d6b66;
+  color: #ffffff;
+  display: inline-flex;
+  height: 30px;
+  justify-content: center;
+  width: 30px;
+}
+
+.brand-context {
+  border-left: 1px solid #dce4e8;
+  color: #647481;
+  font-size: 13px;
+  font-weight: 400;
+  margin-left: 3px;
+  padding-left: 12px;
+}
+
+.user-actions {
+  gap: 4px;
+}
+
+.user-identity {
+  align-items: flex-end;
+  flex-direction: column;
+  line-height: 1.25;
+  margin-right: 8px;
+}
+
+.user-identity strong {
+  font-size: 13px;
+}
+
+.user-identity span {
+  color: #73818b;
+  font-size: 11px;
+}
+
+.header-icon-button.ant-btn {
+  align-items: center;
+  color: #49616f;
+  display: inline-flex;
+  height: 32px;
+  justify-content: center;
+  width: 32px;
+}
+
+.workspace-shell {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  min-height: 100vh;
+  padding-top: 56px;
+}
+
+.workspace-sidebar {
+  background: #ffffff;
+  border-right: 1px solid #dce4e8;
+  min-height: calc(100vh - 56px);
+  overflow-y: auto;
+}
+
+.project-section,
+.tree-section {
+  padding: 18px 14px;
+}
+
+.project-section {
+  border-bottom: 1px solid #e7edef;
+}
+
+.sidebar-heading {
+  align-items: center;
+  color: #5c6c76;
+  display: flex;
+  font-size: 12px;
+  font-weight: 700;
+  justify-content: space-between;
+  margin: 0 6px 9px;
+}
+
+.project-count {
+  color: #8a9aa3;
+  font-weight: 400;
+}
+
+.project-list {
+  display: grid;
+  gap: 3px;
+}
+
+.project-button {
+  background: transparent;
+  border: 0;
+  border-left: 3px solid transparent;
+  color: #354854;
+  cursor: pointer;
+  gap: 8px;
+  min-height: 36px;
+  padding: 7px 8px 7px 9px;
+  text-align: left;
+  width: 100%;
+}
+
+.project-button:hover {
+  background: #eef6f5;
+}
+
+.project-button.active {
+  background: #e7f3f1;
+  border-left-color: #0d6b66;
+  color: #075d58;
+  font-weight: 600;
+}
+
+.project-button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-button small {
+  color: #82919a;
+  font-size: 11px;
+  margin-left: auto;
+}
+
+.sidebar-empty {
+  margin: 20px 0 4px;
+}
+
+.sidebar-empty .ant-empty-description {
+  color: #7b8b94;
+  font-size: 12px;
+}
+
+.document-tree.ant-tree {
+  background: transparent;
+  color: #354854;
+  font-size: 13px;
+}
+
+.document-tree .ant-tree-node-content-wrapper {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.document-tree .ant-tree-node-selected {
+  background: #e7f3f1 !important;
+  color: #075d58;
+}
+
+.tree-placeholder {
+  color: #82919a;
+  font-size: 13px;
+  margin: 8px 6px;
+}
+
+.reader-panel {
+  min-width: 0;
+  padding: 30px clamp(24px, 5vw, 76px) 64px;
+}
+
+.workspace-error {
+  margin: 0 auto 18px;
+  max-width: 980px;
+}
+
+.reader-state {
+  align-items: center;
+  color: #7d8c94;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  justify-content: center;
+  min-height: 62vh;
+  text-align: center;
+}
+
+.reader-state .ant-typography {
+  color: #52646e;
+  font-size: 18px;
+  font-weight: 500;
+  margin: 0;
+}
+
+.markdown-document {
+  color: #22313a;
+  line-height: 1.75;
+  margin: 0 auto;
+  max-width: 980px;
+  overflow-wrap: anywhere;
+}
+
+.document-path {
+  border-bottom: 1px solid #dce4e8;
+  color: #60717b;
+  font-size: 13px;
+  margin-bottom: 26px;
+  padding-bottom: 12px;
+}
+
+.markdown-document h1,
+.markdown-document h2,
+.markdown-document h3 {
+  color: #132f40;
+  line-height: 1.35;
+  margin-top: 1.65em;
+}
+
+.markdown-document h1 {
+  font-size: 28px;
+}
+
+.markdown-document h2 {
+  font-size: 22px;
+}
+
+.markdown-document h3 {
+  font-size: 18px;
+}
+
+.markdown-document code {
+  background: #eaf0f2;
+  color: #954b28;
+  padding: 1px 4px;
+}
+
+.markdown-document pre {
+  background: #17242c;
+  color: #e8f0f1;
+  overflow-x: auto;
+  padding: 16px;
+}
+
+.markdown-document pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+
+.markdown-document blockquote {
+  border-left: 3px solid #4f9791;
+  color: #50616a;
+  margin-left: 0;
+  padding-left: 16px;
+}
+
+.markdown-document table {
+  border-collapse: collapse;
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.markdown-document td,
+.markdown-document th {
+  border: 1px solid #dce4e8;
+  padding: 7px 10px;
+}
+
+.mermaid-details {
+  border: 1px solid #dce4e8;
+  margin: 16px 0;
+  padding: 10px 12px;
+}
+
+.mermaid-details summary {
+  color: #0d6b66;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.mermaid-details svg {
+  max-width: 100%;
+}
+
+.management-drawer .ant-drawer-header {
+  border-bottom-color: #dce4e8;
+}
+
+.management-section + .management-section {
+  border-top: 1px solid #e7edef;
+  margin-top: 24px;
+  padding-top: 22px;
+}
+
+.management-section h3 {
+  color: #243842;
+  font-size: 15px;
+  margin: 0 0 14px;
+}
+
+@media (max-width: 720px) {
+  .workspace-header {
+    padding: 0 12px;
+  }
+
+  .brand-context,
+  .user-identity span {
+    display: none;
+  }
+
+  .workspace-shell {
+    grid-template-columns: minmax(190px, 42vw) minmax(0, 1fr);
+  }
+
+  .project-section,
+  .tree-section {
+    padding: 14px 8px;
+  }
+
+  .project-button small {
+    display: none;
+  }
+
+  .reader-panel {
+    padding: 22px 18px 48px;
+  }
+
+  .markdown-document h1 {
+    font-size: 24px;
+  }
+
+  .management-drawer .ant-drawer-content-wrapper {
+    max-width: 100vw;
+  }
 }
