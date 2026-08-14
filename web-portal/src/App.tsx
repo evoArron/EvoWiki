@@ -32,7 +32,7 @@ type Document = {
   content: string;
 };
 
-function MermaidDiagram({ chart }: { chart: string }) {
+export function MermaidDiagram({ chart }: { chart: string }) {
   const [open, setOpen] = useState(false);
   const container = useRef<HTMLDivElement>(null);
   const diagramId = useId().replace(/:/g, "");
