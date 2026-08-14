@@ -10,19 +10,19 @@ const ROLE_OPTIONS = [
 const AUDIT_ACTIONS = ["member.created", "member.updated", "member.password_reset", "member.status_changed", "member.system_role_changed", "project.created", "project.updated", "project.owner_transferred", "project.archived", "project.restored", "project.permission_changed", "project.permission_revoked"];
 
 type Member = { username: string; display_name: string; role: string; is_active: boolean };
-type Project = { project_id: string; name: string; description: string; owner_username: string; status: string };
+type Project = { project_id: string; name: string; description: string; owner_username: string; status: string; role?: string | null };
 type Permission = { username: string; display_name: string; role: string };
 type Audit = { id: number; actor_username: string; action: string; object_type: string; object_id: string; created_at: string };
 type MemberDrawer = "create" | "edit" | "password" | null;
 type ProjectDrawer = "create" | "edit" | "owner" | "permissions" | null;
 
-type Props = { open: boolean; onClose: () => void; token: string | null };
+type Props = { open: boolean; onClose: () => void; token: string | null; isSystemAdmin: boolean; manageableProjects: Project[] };
 
 function errorText(response: Response) {
   return response.json().then((body: { detail?: string }) => body.detail || "操作失败，请检查输入和权限").catch(() => "操作失败，请检查输入和权限");
 }
 
-export function ManagementCenter({ open, onClose, token }: Props) {
+export function ManagementCenter({ open, onClose, token, isSystemAdmin, manageableProjects }: Props) {
   const [members, setMembers] = useState<Member[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [audit, setAudit] = useState<Audit[]>([]);
@@ -48,15 +48,19 @@ export function ManagementCenter({ open, onClose, token }: Props) {
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, "Content-Type": "application/json" }), [token]);
   const load = useCallback(async () => {
     if (!token) return;
+    if (!isSystemAdmin) {
+      setProjects(manageableProjects);
+      return;
+    }
     const [memberResult, projectResult] = await Promise.all([
       fetch(`${API}/api/admin/members`, { headers }),
       fetch(`${API}/api/admin/projects`, { headers }),
     ]);
     if (memberResult.ok) setMembers(await memberResult.json() as Member[]);
     if (projectResult.ok) setProjects(await projectResult.json() as Project[]);
-  }, [headers, token]);
+  }, [headers, isSystemAdmin, manageableProjects, token]);
   const loadAudit = useCallback(async (page = auditPage, action = auditAction) => {
-    if (!token) return;
+    if (!token || !isSystemAdmin) return;
     const query = new URLSearchParams({ page: String(page), page_size: "20" });
     if (action) query.set("action", action);
     const response = await fetch(`${API}/api/admin/audit-logs?${query}`, { headers });
@@ -65,7 +69,7 @@ export function ManagementCenter({ open, onClose, token }: Props) {
       setAudit(data.items);
       setAuditTotal(data.total);
     }
-  }, [auditAction, auditPage, headers, token]);
+  }, [auditAction, auditPage, headers, isSystemAdmin, token]);
   const loadPermissions = useCallback(async (projectId: string) => {
     const response = await fetch(`${API}/api/admin/projects/${projectId}/permissions`, { headers });
     if (response.ok) setPermissions(await response.json() as Permission[]);
@@ -140,12 +144,12 @@ export function ManagementCenter({ open, onClose, token }: Props) {
     <Space wrap style={{ marginBottom: 12 }}>
       <Input aria-label="搜索项目" placeholder="搜索项目、名称或负责人" value={projectQuery} onChange={(event) => setProjectQuery(event.target.value)} />
       <Select aria-label="项目状态" allowClear placeholder="项目状态" style={{ width: 110 }} value={projectStatus} onChange={setProjectStatus} options={[{ value: "active", label: "活动" }, { value: "archived", label: "已归档" }]} />
-      <Button type="primary" onClick={() => openProject("create")}>新增项目</Button>
+      {isSystemAdmin && <Button type="primary" onClick={() => openProject("create")}>新增项目</Button>}
     </Space>
     <Table size="small" rowKey="project_id" dataSource={filteredProjects} pagination={false} scroll={{ x: 860 }} columns={[
       { title: "名称", dataIndex: "name" }, { title: "标识", dataIndex: "project_id" }, { title: "负责人", dataIndex: "owner_username" },
       { title: "状态", render: (_, item: Project) => <Tag color={item.status === "active" ? "green" : "default"}>{item.status === "active" ? "活动" : "已归档"}</Tag> },
-      { title: "操作", render: (_, item: Project) => <Space wrap>{item.status === "active" && <><Button size="small" onClick={() => openProject("edit", item)}>编辑</Button><Button size="small" onClick={() => openProject("owner", item)}>转移负责人</Button><Button size="small" onClick={() => openProject("permissions", item)}>权限</Button></>}<Button size="small" onClick={() => void submit(`/api/admin/projects/${item.project_id}/${item.status === "active" ? "archive" : "restore"}`, "POST")}>{item.status === "active" ? "归档" : "恢复"}</Button></Space> },
+      { title: "操作", render: (_, item: Project) => <Space wrap>{item.status === "active" && <><Button size="small" onClick={() => openProject("edit", item)}>编辑</Button><Button size="small" onClick={() => openProject("owner", item)}>转移负责人</Button><Button size="small" onClick={() => openProject("permissions", item)}>权限</Button></>}{isSystemAdmin && <Button size="small" onClick={() => void submit(`/api/admin/projects/${item.project_id}/${item.status === "active" ? "archive" : "restore"}`, "POST")}>{item.status === "active" ? "归档" : "恢复"}</Button>}</Space> },
     ]} />
   </>;
 
@@ -158,7 +162,7 @@ export function ManagementCenter({ open, onClose, token }: Props) {
 
   return <Drawer title="管理中心" width="min(960px, 100vw)" open={open} onClose={onClose}>
     {error && <Alert type="error" showIcon message={error} closable onClose={() => setError(undefined)} style={{ marginBottom: 12 }} />}
-    <Tabs items={[{ key: "members", label: "成员", children: membersTab }, { key: "projects", label: "项目", children: projectsTab }, { key: "audit", label: "审计日志", children: auditTab }]} />
+    <Tabs items={isSystemAdmin ? [{ key: "members", label: "成员", children: membersTab }, { key: "projects", label: "项目", children: projectsTab }, { key: "audit", label: "审计日志", children: auditTab }] : [{ key: "projects", label: "项目", children: projectsTab }]} />
 
     <Drawer title={memberDrawer === "create" ? "新增成员" : memberDrawer === "password" ? "重置密码" : "编辑成员"} width={420} open={memberDrawer !== null} onClose={() => setMemberDrawer(null)}>
       {memberDrawer === "password" ? <Form form={memberForm} layout="vertical" onFinish={async (values) => { if (selectedMember && await submit(`/api/admin/members/${selectedMember.username}/reset-password`, "POST", values)) setMemberDrawer(null); }}><Form.Item label="新临时密码" name="password" rules={[{ required: true, message: "请输入临时密码" }]}><Input.Password /></Form.Item><Button htmlType="submit" type="primary">重置</Button></Form> : <Form form={memberForm} layout="vertical" onFinish={async (values) => {

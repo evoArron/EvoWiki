@@ -18,7 +18,11 @@ type CurrentUser = {
 
 type Project = {
   project_id: string;
-  role: string;
+  role: string | null;
+  name: string;
+  description: string;
+  owner_username: string;
+  status: string;
 };
 
 type DocumentNode = {
@@ -321,7 +325,7 @@ export function App() {
             <strong>{user.username}</strong>
             <span>{user.role === "system_admin" ? "系统管理员" : user.role}</span>
           </div>
-          {user.role === "system_admin" && (
+          {(user.role === "system_admin" || projects.some((project) => project.role === "project_admin")) && (
             <Tooltip title="管理">
               <Button aria-label="管理" className="header-icon-button" icon={<Settings size={18} />} type="text" onClick={() => setManagementOpen(true)} />
             </Tooltip>
@@ -394,7 +398,13 @@ export function App() {
         </section>
       </div>
 
-      <ManagementCenter open={managementOpen} onClose={() => setManagementOpen(false)} token={sessionStorage.getItem(TOKEN_KEY)} />
+      <ManagementCenter
+        open={managementOpen}
+        onClose={() => setManagementOpen(false)}
+        token={sessionStorage.getItem(TOKEN_KEY)}
+        isSystemAdmin={user.role === "system_admin"}
+        manageableProjects={projects.filter((project) => project.role === "project_admin")}
+      />
     </main>
   );
 }

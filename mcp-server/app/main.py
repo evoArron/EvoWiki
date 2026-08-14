@@ -71,7 +71,7 @@ class OwnerRequest(BaseModel):
 
 
 class GrantProjectPermissionRequest(BaseModel):
-    username: str
+    username: str | None = None
     role: str
 
 
@@ -407,6 +407,8 @@ def create_app(
         if request is None:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="缺少授权内容")
         username = username or request.username
+        if not username:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="缺少成员登录名")
         project_manager(project_id, user, session)
         if request.role not in PROJECT_ROLES:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="无效项目角色")

@@ -106,6 +106,26 @@ def test_project_owner_is_project_admin_and_archived_projects_reject_permission_
     assert denied.status_code == 403
 
 
+def test_project_permission_put_uses_path_member_identity(tmp_path):
+    client = TestClient(create_test_app(tmp_path))
+    admin_token = login(client, "admin", "correct-horse-battery-staple")
+    client.post(
+        "/api/admin/members",
+        headers=bearer(admin_token),
+        json={"username": "editor", "display_name": "Editor", "password": "temporary-password"},
+    )
+    client.post("/api/admin/projects", headers=bearer(admin_token), json={"project_id": "alpha", "name": "Alpha"})
+
+    response = client.put(
+        "/api/admin/projects/alpha/permissions/editor",
+        headers=bearer(admin_token),
+        json={"role": "editor"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"username": "editor", "display_name": "Editor", "role": "editor"}
+
+
 def test_last_system_admin_cannot_be_disabled(tmp_path):
     client = TestClient(create_test_app(tmp_path))
     admin_token = login(client, "admin", "correct-horse-battery-staple")
