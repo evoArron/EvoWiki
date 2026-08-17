@@ -3,6 +3,26 @@ from fastapi.testclient import TestClient
 from conftest import ADMIN_PASSWORD, bearer, create_test_app, login
 
 
+def test_admin_can_configure_and_test_the_document_git_repository(tmp_path):
+    calls = []
+    def git_runner(arguments, _):
+        calls.append(arguments)
+        if arguments in (["rev-parse", "--is-inside-work-tree"], ["remote", "set-url", "origin", "git@github.com:example/docs.git"]):
+            raise RuntimeError("not configured")
+        return ""
+
+    client = TestClient(create_test_app(tmp_path, git_runner=git_runner))
+    headers = bearer(login(client, "admin", ADMIN_PASSWORD))
+    configured = client.put("/api/admin/git-settings", headers=headers, json={"remote_url": "git@github.com:example/docs.git", "author_name": "EvoWiki", "author_email": "docs@example.com"})
+    tested = client.post("/api/admin/git-settings/test", headers=headers)
+
+    assert configured.json() == {"remote_url": "git@github.com:example/docs.git", "author_name": "EvoWiki", "author_email": "docs@example.com", "configured": True}
+    assert tested.status_code == 204
+    assert ["init", "-b", "main"] in calls
+    assert ["remote", "add", "origin", "git@github.com:example/docs.git"] in calls
+    assert ["ls-remote", "--heads", "origin"] in calls
+
+
 def test_member_must_change_temporary_password_before_using_workspace(tmp_path):
     client = TestClient(create_test_app(tmp_path))
     admin_token = login(client, "admin", "correct-horse-battery-staple")

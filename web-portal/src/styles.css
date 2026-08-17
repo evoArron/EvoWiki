@@ -248,6 +248,25 @@ input {
   width: 100%;
 }
 
+.draft-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.draft-editor .ant-input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.draft-preview {
+  box-sizing: border-box;
+  min-height: 396px;
+  max-height: 58vh;
+  overflow: auto;
+  border: 1px solid #d9d9d9;
+  padding: 12px;
+}
+
 .management-header {
   align-items: center;
   display: flex;

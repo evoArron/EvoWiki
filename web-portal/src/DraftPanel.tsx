@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Button, Drawer, Form, Input, List, Popconfirm, Space, Tag } from "antd";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 const API = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
@@ -44,7 +46,7 @@ export function DraftPanel({ open, onClose, projectId, token, onPublished }: Pro
 
   const editor = <Form layout="vertical" autoComplete="off">
     <Form.Item label="草稿路径"><Input value={draftPath} disabled={!!selected} onChange={(event) => setDraftPath(event.target.value)} /></Form.Item>
-    <Form.Item label="Markdown"><Input.TextArea rows={16} value={content} onChange={(event) => setContent(event.target.value)} /></Form.Item>
+    <Form.Item label="Markdown"><div className="draft-editor"><Input.TextArea aria-label="Markdown 源码" rows={18} value={content} onChange={(event) => setContent(event.target.value)} /><article className="draft-preview"><ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown></article></div></Form.Item>
     {selected && <Form.Item label="发布路径"><Input value={targetPath} onChange={(event) => setTargetPath(event.target.value)} /></Form.Item>}
     <Space>{creating ? <Button type="primary" onClick={() => void create()}>创建草稿</Button> : <><Button type="primary" onClick={() => void save()}>保存修订</Button><Button onClick={() => void publish(false)}>发布</Button><Popconfirm title="覆盖现有文档？" onConfirm={() => void publish(true)}><Button type="link">确认覆盖发布</Button></Popconfirm></>}<Button type="link" onClick={closeEditor}>返回列表</Button></Space>
   </Form>;

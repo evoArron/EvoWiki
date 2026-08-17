@@ -36,6 +36,7 @@ export function ManagementCenter({ open, onClose, token, isSystemAdmin, manageab
   const [projectStatus, setProjectStatus] = useState<string>();
   const [memberDrawer, setMemberDrawer] = useState<MemberDrawer>(null);
   const [projectDrawer, setProjectDrawer] = useState<ProjectDrawer>(null);
+  const [gitDrawerOpen, setGitDrawerOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<Member>();
   const [selectedProject, setSelectedProject] = useState<Project>();
   const [permissions, setPermissions] = useState<Permission[]>([]);
@@ -45,6 +46,7 @@ export function ManagementCenter({ open, onClose, token, isSystemAdmin, manageab
   const [projectForm] = Form.useForm();
   const [ownerForm] = Form.useForm();
   const [permissionForm] = Form.useForm();
+  const [gitForm] = Form.useForm();
 
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, "Content-Type": "application/json" }), [token]);
   const load = useCallback(async () => {
@@ -92,6 +94,12 @@ export function ManagementCenter({ open, onClose, token, isSystemAdmin, manageab
       setError("无法连接管理服务，请稍后重试");
       return false;
     }
+  }
+
+  async function openGitSettings() {
+    const response = await fetch(`${API}/api/admin/git-settings`, { headers });
+    if (response.ok) gitForm.setFieldsValue(await response.json());
+    setGitDrawerOpen(true);
   }
 
   const filteredMembers = members.filter((member) => {
@@ -164,9 +172,18 @@ export function ManagementCenter({ open, onClose, token, isSystemAdmin, manageab
 
   if (!open) return null;
   return <section className="management-center">
-    <header className="management-header"><h2>管理中心</h2><Button onClick={onClose}>返回阅读</Button></header>
+    <header className="management-header"><h2>管理中心</h2><Space>{isSystemAdmin && <Button type="link" onClick={() => void openGitSettings()}>Git 设置</Button>}<Button onClick={onClose}>返回阅读</Button></Space></header>
     {error && <Alert type="error" showIcon message={error} closable onClose={() => setError(undefined)} style={{ marginBottom: 12 }} />}
     <Tabs items={isSystemAdmin ? [{ key: "members", label: "成员", children: membersTab }, { key: "projects", label: "项目", children: projectsTab }, { key: "audit", label: "审计日志", children: auditTab }] : [{ key: "projects", label: "项目", children: projectsTab }]} />
+
+    <Drawer title="Git 文档仓库" width={460} open={gitDrawerOpen} onClose={() => setGitDrawerOpen(false)}>
+      <Form autoComplete="off" form={gitForm} layout="vertical" onFinish={async (values) => { if (await submit("/api/admin/git-settings", "PUT", values)) setGitDrawerOpen(false); }}>
+        <Form.Item label="远端地址" name="remote_url" rules={[{ required: true, message: "请输入 Git 远端地址" }]}><Input placeholder="git@github.com:organization/docs.git" /></Form.Item>
+        <Form.Item label="提交作者" name="author_name" rules={[{ required: true }]}><Input /></Form.Item>
+        <Form.Item label="提交邮箱" name="author_email" rules={[{ required: true, type: "email" }]}><Input /></Form.Item>
+        <Space><Button htmlType="submit" type="primary">保存配置</Button><Button onClick={() => void submit("/api/admin/git-settings/test", "POST")}>验证连接</Button></Space>
+      </Form>
+    </Drawer>
 
     <Drawer title={memberDrawer === "create" ? "新增成员" : memberDrawer === "password" ? "重置密码" : "编辑成员"} width={420} open={memberDrawer !== null} onClose={() => setMemberDrawer(null)}>
       {memberDrawer === "password" ? <Form autoComplete="off" form={memberForm} layout="vertical" onFinish={async (values) => { if (selectedMember && await submit(`/api/admin/members/${selectedMember.username}/reset-password`, "POST", values)) setMemberDrawer(null); }}><Form.Item label="新临时密码" name="password" rules={[{ required: true, message: "请输入临时密码" }]}><Input.Password /></Form.Item><Button htmlType="submit" type="primary">重置</Button></Form> : <Form autoComplete="off" form={memberForm} layout="vertical" onFinish={async (values) => {

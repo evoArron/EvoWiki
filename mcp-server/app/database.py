@@ -64,6 +64,16 @@ class AuditLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), index=True)
 
 
+class GitSettings(Base):
+    __tablename__ = "git_settings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    remote_url: Mapped[str] = mapped_column(String(512))
+    author_name: Mapped[str] = mapped_column(String(128))
+    author_email: Mapped[str] = mapped_column(String(254))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
+
+
 class Publication(Base):
     __tablename__ = "publications"
 

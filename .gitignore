@@ -9,3 +9,4 @@ web-portal/.pi/
 web-portal/skills-lock.json
 .env
 *.db
+mcp-server/chroma/

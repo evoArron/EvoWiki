@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.database import AuditLog, Project, ProjectPermission, Publication, User, create_session_factory, find_project, find_project_permission, find_user, session_dependency
+from app.database import AuditLog, GitSettings, Project, ProjectPermission, Publication, User, create_session_factory, find_project, find_project_permission, find_user, session_dependency
 from app.publishing import ChromaIndexer, GitRunner, Indexer, PublicationService, run_git
 
 TOKEN_LIFETIME = timedelta(hours=8)
@@ -141,6 +141,16 @@ class DocumentResponse(BaseModel):
 class DraftRequest(BaseModel):
     path: str = ""
     content: str
+
+
+class GitSettingsRequest(BaseModel):
+    remote_url: str = Field(min_length=1, max_length=512)
+    author_name: str = Field(min_length=1, max_length=128)
+    author_email: str = Field(min_length=3, max_length=254)
+
+
+class GitSettingsResponse(GitSettingsRequest):
+    configured: bool
 
 
 class PublishRequest(BaseModel):
@@ -365,6 +375,39 @@ def create_app(
         audit(session, admin, "member.system_role_changed", "member", username, before, {"role": member.role})
         session.commit()
         return member_response(member)
+
+    @app.get("/api/admin/git-settings", response_model=GitSettingsResponse)
+    def read_git_settings(_: User = Depends(admin_user), session: Session = Depends(get_session)) -> GitSettingsResponse:
+        settings = session.get(GitSettings, 1)
+        if settings is None:
+            return GitSettingsResponse(remote_url="", author_name="", author_email="", configured=False)
+        return GitSettingsResponse(remote_url=settings.remote_url, author_name=settings.author_name, author_email=settings.author_email, configured=True)
+
+    @app.put("/api/admin/git-settings", response_model=GitSettingsResponse)
+    def configure_git(request: GitSettingsRequest, session: Session = Depends(get_session), admin: User = Depends(admin_user)) -> GitSettingsResponse:
+        wiki_root.mkdir(parents=True, exist_ok=True)
+        try:
+            git_runner(["rev-parse", "--is-inside-work-tree"], wiki_root)
+        except RuntimeError:
+            git_runner(["init", "-b", "main"], wiki_root)
+        try:
+            git_runner(["remote", "set-url", "origin", request.remote_url], wiki_root)
+        except RuntimeError:
+            git_runner(["remote", "add", "origin", request.remote_url], wiki_root)
+        git_runner(["config", "user.name", request.author_name], wiki_root)
+        git_runner(["config", "user.email", request.author_email], wiki_root)
+        settings = session.get(GitSettings, 1) or GitSettings(id=1, remote_url=request.remote_url, author_name=request.author_name, author_email=request.author_email)
+        settings.remote_url, settings.author_name, settings.author_email = request.remote_url, request.author_name, request.author_email
+        session.add(settings)
+        audit(session, admin, "git.configured", "git_settings", "origin", after={"remote_url": request.remote_url, "author_name": request.author_name, "author_email": request.author_email})
+        session.commit()
+        return GitSettingsResponse(remote_url=settings.remote_url, author_name=settings.author_name, author_email=settings.author_email, configured=True)
+
+    @app.post("/api/admin/git-settings/test", status_code=status.HTTP_204_NO_CONTENT)
+    def test_git_connection(_: User = Depends(admin_user), session: Session = Depends(get_session)) -> None:
+        if session.get(GitSettings, 1) is None:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="请先配置 Git 仓库")
+        git_runner(["ls-remote", "--heads", "origin"], wiki_root)
 
     @app.get("/api/admin/projects", response_model=list[ProjectResponse])
     def list_admin_projects(_: User = Depends(admin_user), session: Session = Depends(get_session)) -> list[ProjectResponse]:
