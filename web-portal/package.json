@@ -24,7 +24,6 @@
     "tailwindcss": "3.4.4"
   },
   "devDependencies": {
-    "@playwright/test": "^1.51.1",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@types/react": "18.3.3",
